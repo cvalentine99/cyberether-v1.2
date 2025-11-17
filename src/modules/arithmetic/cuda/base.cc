@@ -62,16 +62,17 @@ Result Arithmetic<D, T>::createCompute(const Context& ctx) {
 
             // Return if ID is out of bounds.
 
-            if (id > size) {
+            if (id >= size) {
                 return;
             }
 
             // Calculate shape from ID.
 
             size_t shape[8];
-            for (size_t i = 0; i < input.rank; i++) {
-                shape[i] = id % input.shape[i];
-                id /= input.shape[i];
+            size_t temp_id = id;
+            for (int i = (int)input.rank - 1; i >= 0; i--) {
+                shape[i] = temp_id % input.shape[i];
+                temp_id /= input.shape[i];
             }
 
             // Calculate input and output offset from shape.

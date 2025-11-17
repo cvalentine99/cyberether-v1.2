@@ -35,6 +35,11 @@ Result Constellation<D, T>::createCompute(const Context&) {
 
 template<Device D, typename T>
 Result Constellation<D, T>::compute(const Context&) {
+    // Skip if rendering infrastructure is not initialized (e.g., benchmark mode).
+    if (!gimpl->shapes) {
+        return Result::SUCCESS;
+    }
+
     // Get position buffer from components.
     std::span<Extent2D<F32>> positions;
     JST_CHECK(gimpl->shapes->getPositions("constellation_points", positions));
