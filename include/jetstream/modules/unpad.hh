@@ -25,8 +25,9 @@ class Unpad : public Module, public Compute {
     struct Config {
         U64 size = 33;
         U64 axis = 1;
+        U64 offset = 0;
 
-        JST_SERDES(size, axis);
+        JST_SERDES(size, axis, offset);
     };
 
     constexpr const Config& getConfig() const {

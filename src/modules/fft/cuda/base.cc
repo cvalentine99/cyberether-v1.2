@@ -46,26 +46,28 @@ Result FFT<D, IT, OT>::createCompute(const Context& ctx) {
     // Create FFT plan.
     // This should get the shape() and stride() of the input buffer and create a plan for the FFT.
 
-    const U64 last_axis = input.buffer.rank() - 1;
+    const U64 axis = config.axis;
 
     int rank = 1;
 
     // FFT size for each dimension.
-    int n[] = { static_cast<int>(input.buffer.shape()[last_axis]) };
+    int n[] = { static_cast<int>(input.buffer.shape()[axis]) };
 
     // Distance between successive input element and output element.
-    int istride = input.buffer.stride()[last_axis];
+    int istride = input.buffer.stride()[axis];
     int ostride = 1;
 
     // Number of batched FFTs.
     U64 numberOfOperations = 1;
-    for (U64 i = 0; i < last_axis; i++) {
-        numberOfOperations *= input.buffer.shape()[i];
+    for (U64 i = 0; i < input.buffer.rank(); i++) {
+        if (i != axis) {
+            numberOfOperations *= input.buffer.shape()[i];
+        }
     }
 
     // Distance between input batches and output batches.
-    int idist = input.buffer.shape()[last_axis];
-    int odist = input.buffer.shape()[last_axis];
+    int idist = input.buffer.shape()[axis];
+    int odist = input.buffer.shape()[axis];
 
     // Input size with pitch, this is ignored for 1D tansformations.
     int inembed[] = { 0 };

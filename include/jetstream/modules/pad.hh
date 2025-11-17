@@ -25,8 +25,10 @@ class Pad : public Module, public Compute {
     struct Config {
         U64 size = 33;
         U64 axis = 1;
+        U64 offset = 0;
+        bool blank = true;
 
-        JST_SERDES(size, axis);
+        JST_SERDES(size, axis, offset, blank);
     };
 
     constexpr const Config& getConfig() const {

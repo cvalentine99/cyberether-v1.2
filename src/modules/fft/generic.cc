@@ -9,15 +9,25 @@ Result FFT<D, IT, OT>::create() {
     JST_DEBUG("Initializing FFT module.");
     JST_INIT_IO();
 
+    // Check parameters.
+
+    if (config.axis >= input.buffer.rank()) {
+        JST_ERROR("Configuration axis ({}) is larger than or equal to the input rank ({}).", config.axis,
+                                                                                             input.buffer.rank());
+        return Result::ERROR;
+    }
+
     // Calculate parameters.
 
-    const U64 last_axis = input.buffer.rank() - 1;
+    const U64 axis = config.axis;
 
-    pimpl->numberOfElements = input.buffer.shape()[last_axis];
+    pimpl->numberOfElements = input.buffer.shape()[axis];
 
     pimpl->numberOfOperations = 1;
-    for (U64 i = 0; i < last_axis; i++) {
-        pimpl->numberOfOperations *= input.buffer.shape()[i];
+    for (U64 i = 0; i < input.buffer.rank(); i++) {
+        if (i != axis) {
+            pimpl->numberOfOperations *= input.buffer.shape()[i];
+        }
     }
 
     pimpl->elementStride = 1;
@@ -25,8 +35,6 @@ Result FFT<D, IT, OT>::create() {
     JST_TRACE("[FFT] Number of elements: {};", pimpl->numberOfElements);
     JST_TRACE("[FFT] Number of operations: {};", pimpl->numberOfOperations);
     JST_TRACE("[FFT] Element stride: {};", pimpl->elementStride);
-
-    // TODO: Implement axis selection for FFT.
 
     // Allocate output.
 
@@ -38,6 +46,7 @@ Result FFT<D, IT, OT>::create() {
 template<Device D, typename IT, typename OT>
 void FFT<D, IT, OT>::info() const {
     JST_DEBUG("  Forward: {}", config.forward ? "YES" : "NO");
+    JST_DEBUG("  Axis:    {}", config.axis);
 }
 
 }  // namespace Jetstream

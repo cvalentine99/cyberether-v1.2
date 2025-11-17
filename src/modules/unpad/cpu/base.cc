@@ -24,20 +24,30 @@ Result Unpad<D, T>::createCompute(const Context&) {
 template<Device D, typename T>
 Result Unpad<D, T>::compute(const Context&) {
     std::vector<U64> shape = input.padded.shape();
-    const U64 pad_offset = shape[config.axis] - config.size;
+    const U64 axis = config.axis;
+    const U64 totalAxisSize = shape[axis];
+    const U64 dataAxisSize = totalAxisSize - config.size;
+    const U64 frontPad = config.offset;
+    const U64 tailPadStart = frontPad + dataAxisSize;
 
     for (U64 i = 0; i < input.padded.size(); i++) {
         input.padded.offset_to_shape(i, shape);
+        const U64 axisIndex = shape[axis];
 
-        if (shape[config.axis] >= pad_offset) {
-            shape[config.axis] -= pad_offset;
+        if (axisIndex < frontPad) {
             output.pad[shape] = input.padded[i];
-        } else {
-            output.unpadded[shape] = input.padded[i];
+            continue;
         }
-    }
 
-    // TODO: Add offset.
+        if (axisIndex >= tailPadStart) {
+            shape[axis] -= dataAxisSize;
+            output.pad[shape] = input.padded[i];
+            continue;
+        }
+
+        shape[axis] -= frontPad;
+        output.unpadded[shape] = input.padded[i];
+    }
 
     return Result::SUCCESS;
 }

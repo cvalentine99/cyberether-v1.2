@@ -21,6 +21,13 @@ Result Unpad<D, T>::create() {
         return Result::ERROR;
     }
 
+    if (config.offset > config.size) {
+        JST_ERROR("Pad offset ({}) must be less than or equal to the configured pad size ({}).",
+                  config.offset,
+                  config.size);
+        return Result::ERROR;
+    }
+
     // Calculate padded shape.
 
     std::vector<U64> unpaddedShape = input.padded.shape();
@@ -40,6 +47,7 @@ template<Device D, typename T>
 void Unpad<D, T>::info() const {
     JST_DEBUG("  Pad Size:   {}", config.size);
     JST_DEBUG("  Pad Axis:   {}", config.axis);
+    JST_DEBUG("  Pad Offset: {}", config.offset);
 }
 
 }  // namespace Jetstream

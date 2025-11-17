@@ -31,8 +31,9 @@ class FFT : public Module, public Compute {
 
     struct Config {
         bool forward = true;
+        U64 axis = 1;
 
-        JST_SERDES(forward);
+        JST_SERDES(forward, axis);
     };
 
     constexpr const Config& getConfig() const {
