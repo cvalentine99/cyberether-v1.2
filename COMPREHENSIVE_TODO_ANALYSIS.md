@@ -15,9 +15,9 @@
 | `src/viewport/headless/remote.cc` | 1018-1019 | "Unclear if this is needed. Crash on some systems" | ✅ RESOLVED | 8f88a7b |
 | `src/modules/audio/generic.cc` | 63 | "Implement wchar to string conversion" | ✅ RESOLVED | 353f173 |
 | `src/modules/audio/generic.cc` | 67 | "Implement GUID to string conversion" | ✅ RESOLVED | 353f173 |
-| `src/instance.cc` | 173 | "Improve error messages" | ✅ RESOLVED | WORKTREE |
-| `include/jetstream/instance.hh` | 208 | "Maybe add module->destroy()" | ✅ RESOLVED | WORKTREE |
-| `src/render/components/text.cc` | 423 | "Find better way to normalize glyph offsets" | ✅ RESOLVED | WORKTREE |
+| `src/instance.cc` | 173 | "Improve error messages" | ✅ RESOLVED | 0ec4e67 |
+| `include/jetstream/instance.hh` | 208 | "Maybe add module->destroy()" | ✅ RESOLVED | 0ec4e67 |
+| `src/render/components/text.cc` | 423 | "Find better way to normalize glyph offsets" | ✅ RESOLVED | 0ec4e67 |
 
 **Total Resolved This Session:** 8 TODOs
 

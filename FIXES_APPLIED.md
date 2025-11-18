@@ -9,9 +9,9 @@ This document tracks all fixes and improvements applied during the current devel
 **Date:** November 18, 2025
 **Branch:** main
 **Commits Made:** 4
-**Files Modified:** 53
-**TODOs Resolved:** 38
-**Status:** ✅ All changes committed and compiled successfully
+**Files Modified:** 41
+**TODOs Resolved:** 41
+**Status:** ✅ All changes committed and compiled locally (ccache disabled due to tmp perms)
 
 ---
 
@@ -139,6 +139,36 @@ This document tracks all fixes and improvements applied during the current devel
 
 ---
 
+### 5. Improve Instance Validation and Text Layout
+**Commit:** `0ec4e67`
+**Files Changed:** 3 files, 71 insertions(+), 30 deletions(-)
+
+#### Instance Link Error Reporting (`src/instance.cc`)
+**Problem:**
+- TODO flagged vague errors when linking modules and potential crashes when pins were absent
+
+**Solution:**
+- Added explicit block/pin existence checks and clearer diagnostics for already-linked inputs
+- Prevented `std::map::at()` exceptions by validating pin presence ahead of time
+
+#### Module Cleanup on Create Failure (`include/jetstream/instance.hh`)
+**Problem:**
+- TODO noted missing `module->destroy()` when `create()` fails, leaking partially initialized modules
+
+**Solution:**
+- Always invoke `module->destroy()` on failure and warn if cleanup also fails
+
+#### Text Glyph Placement Refactor (`src/render/components/text.cc`)
+**Problem:**
+- TODO requested a better approach to normalize glyph offsets; previous implementation double-iterated characters
+
+**Solution:**
+- Cache glyph placement metadata in one pass, reuse it when building vertices, and remove the TODO
+
+**Impact:** ✅ Cleaner diagnostics, safe failure cleanup, and more efficient glyph layout
+
+---
+
 ## TODOs Resolved in This Session
 
 | Location | Original TODO | Status |
@@ -149,8 +179,11 @@ This document tracks all fixes and improvements applied during the current devel
 | `src/modules/audio/generic.cc:63` | "Implement wchar to string conversion" | ✅ FIXED - Full implementation |
 | `src/modules/audio/generic.cc:67` | "Implement GUID to string conversion" | ✅ FIXED - Full implementation |
 | **33 Block Description TODOs** | "Add decent block description describing internals and I/O" | ✅ ALL DOCUMENTED - Comprehensive descriptions added |
+| `src/instance.cc:173` | "Improve error messages" | ✅ FIXED - Added detailed validation (`0ec4e67`) |
+| `include/jetstream/instance.hh:214` | "Maybe add module->destroy()" | ✅ FIXED - Destroy incomplete module (`0ec4e67`) |
+| `src/render/components/text.cc:423` | "Find better way to normalize glyph offsets" | ✅ FIXED - Single-pass glyph placement (`0ec4e67`) |
 
-**Total TODOs Resolved:** 38 (5 critical fixes + 33 documentation)
+**Total TODOs Resolved:** 41 (5 critical fixes + 33 documentation + 3 cleanup)
 
 ---
 
@@ -159,10 +192,12 @@ This document tracks all fixes and improvements applied during the current devel
 ✅ **All changes compile successfully**
 
 ```bash
-meson compile -C build
-# Result: 32/32 targets built successfully
+CCACHE_DISABLE=1 meson compile -C build
+# Result: 17/17 targets built successfully
 # No errors, only expected warnings from third-party headers
 ```
+
+- Note: initial run failed because ccache couldn't create /run/user/1000 temp files; disabling ccache fixes build.
 
 ---
 
@@ -170,8 +205,8 @@ meson compile -C build
 
 ```
 Branch: main
-Your branch is ahead of 'origin/main' by 3 commits (4 after documentation commit).
-Working tree: clean (33 files staged for documentation commit)
+Your branch is ahead of 'origin/main' by 4 commits.
+Working tree: clean
 ```
 
 ---
@@ -182,6 +217,7 @@ Working tree: clean (33 files staged for documentation commit)
 - ✅ Code review: Changes follow project patterns
 - ✅ Merge conflict resolution: Validated improved version chosen
 - ✅ Crash fixes: Addressed root causes, not just symptoms
+- ✅ Cleanup commit rebuilt with `CCACHE_DISABLE=1 meson compile -C build`
 
 ---
 
