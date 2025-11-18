@@ -10,9 +10,27 @@
 namespace Jetstream::Backend {
 
 Metal::Metal(const Config& config) : config(config) {
-    // Get default Metal device.
-    // TODO: Respect config.deviceId.
-    if (!(device = MTL::CreateSystemDefaultDevice())) {
+    // Get all Metal devices and select based on config.deviceId.
+    NS::Array* devices = MTL::CopyAllDevices();
+
+    if (!devices || devices->count() == 0) {
+        JST_FATAL("No Metal devices found.");
+        JST_CHECK_THROW(Result::FATAL);
+    }
+
+    // Select device based on config.deviceId.
+    if (config.deviceId >= devices->count()) {
+        JST_WARN("Device ID {} out of range (only {} devices available). Using default device.",
+                 config.deviceId, devices->count());
+        device = MTL::CreateSystemDefaultDevice();
+        devices->release();
+    } else {
+        device = devices->object<MTL::Device>(config.deviceId);
+        device->retain();  // Retain since we're storing a reference.
+        devices->release();
+    }
+
+    if (!device) {
         JST_FATAL("Cannot create Metal device.");
         JST_CHECK_THROW(Result::FATAL);
     }
@@ -28,6 +46,7 @@ Metal::Metal(const Config& config) : config(config) {
     JST_INFO("-----------------------------------------------------");
     JST_INFO("Jetstream Heterogeneous Backend [METAL]")
     JST_INFO("-----------------------------------------------------");
+    JST_INFO("Device ID:       {}", config.deviceId);
     JST_INFO("Device Name:     {}", getDeviceName());
     JST_INFO("Device Type:     {}", getPhysicalDeviceType());
     JST_INFO("API Version:     {}", getApiVersion());
