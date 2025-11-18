@@ -619,15 +619,30 @@ void Lineplot<D, T>::GImpl::updateState(Lineplot<D, T>& m) {
 
 template<Device D, typename T>
 void Lineplot<D, T>::GImpl::updateCursorState(Lineplot<D, T>& m) {
-    // Fetch closest cursor plot value.
-    // TODO: Implement interpolation.
+    // Fetch cursor plot value with linear interpolation for smooth tracking.
 
     const auto stepX = (2.0f * paddingScale.x) / numberOfElements;
-    const U64 cursorIndex = std::clamp((cursorPos.x + paddingScale.x) / stepX, 0.0f, numberOfElements - 1.0f);
+    const F32 exactIndex = (cursorPos.x + paddingScale.x) / stepX;
+    const U64 indexLow = std::clamp(static_cast<U64>(std::floor(exactIndex)), 0UL, numberOfElements - 1);
+    const U64 indexHigh = std::min(indexLow + 1, numberOfElements - 1);
+    const F32 fraction = exactIndex - static_cast<F32>(indexLow);
 
-    Tensor<D, F32> signalPointSlice = signalPoints;
-    signalPointSlice.slice({cursorIndex, {}});
-    Memory::Copy(cursorSignalPoint, signalPointSlice);
+    // Fetch both neighboring points for interpolation
+    Tensor<D, F32> signalPointLow = signalPoints;
+    signalPointLow.slice({indexLow, {}});
+
+    Tensor<D, F32> signalPointHigh = signalPoints;
+    signalPointHigh.slice({indexHigh, {}});
+
+    Tensor<Device::CPU, F32> cpuPointLow({2});
+    Tensor<Device::CPU, F32> cpuPointHigh({2});
+
+    Memory::Copy(cpuPointLow, signalPointLow);
+    Memory::Copy(cpuPointHigh, signalPointHigh);
+
+    // Linear interpolation: lerp(a, b, t) = a + t * (b - a)
+    cursorSignalPoint[0] = cpuPointLow[0] + fraction * (cpuPointHigh[0] - cpuPointLow[0]);
+    cursorSignalPoint[1] = cpuPointLow[1] + fraction * (cpuPointHigh[1] - cpuPointLow[1]);
 
     const auto cursorValueX = cursorSignalPoint[0] * paddingScale.x;
     const auto cursorValueY = cursorSignalPoint[1] * paddingScale.y;
