@@ -53,7 +53,9 @@ Result Spectrogram<D, T>::createCompute(const Context& ctx) {
         }
     )""");
 
-    ctx.cuda->createKernel("rise", R"""(
+    ctx.cuda->createKernel("rise",
+                           R"""(
+        #include "jetstream_window.cuh"
         __global__ void rise(const float* input, float* bins, size_t numberOfElements, size_t numberOfBatches, size_t height) {
             const size_t id = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -61,15 +63,18 @@ Result Spectrogram<D, T>::createCompute(const Context& ctx) {
                 return;
             }
 
+            const float windowWeight = jst_window_hann(id, numberOfElements);
+
             for (size_t b = 0; b < numberOfBatches * numberOfElements; b += numberOfElements) {
                 const size_t index = input[id + b] * height;
 
                 if (index < height && index > 0) {
-                    atomicAdd(&bins[id + (index * numberOfElements)], 0.02f);
+                    atomicAdd(&bins[id + (index * numberOfElements)], 0.02f * windowWeight);
                 }
             }
         }
-    )""");
+    )""",
+                           {CUDA::KernelHeader::WINDOW});
 
     // Initialize kernel size.
 

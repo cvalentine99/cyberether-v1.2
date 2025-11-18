@@ -42,6 +42,7 @@ Result Duplicate<D, T>::createCompute(const Context& ctx) {
     // Create CUDA kernel.
 
     std::string kernel = R"""(
+        #include "jetstream_tensor.cuh"
         struct Meta {
             void* ptr;
             size_t rank;
@@ -49,36 +50,23 @@ Result Duplicate<D, T>::createCompute(const Context& ctx) {
             size_t strides[8];
         };
 
-        // TODO: Improve this naive implementation.
-        // TODO: Implement global stride handler.
+        __device__ inline size_t tensor_offset(const Meta& meta, size_t index) {
+            size_t coords[JST_MAX_TENSOR_RANK];
+            jst_tensor_index(index, meta.rank, meta.shape, coords);
+            return jst_tensor_offset(coords, meta.strides, meta.rank);
+        }
 
         __global__ void duplicate(Meta input, Meta output, size_t size) {
             size_t id = blockIdx.x * blockDim.x + threadIdx.x;
 
             // Return if ID is out of bounds.
 
-            if (id > size) {
+            if (id >= size) {
                 return;
             }
-            
-            // Calculate shape from ID.
 
-            size_t shape[8];
-            size_t temp_id = id;
-            for (int i = (int)input.rank - 1; i >= 0; i--) {
-                shape[i] = temp_id % input.shape[i];
-                temp_id /= input.shape[i];
-            }
-
-            // Calculate input and output offset from shape.
-
-            size_t input_offset = 0;
-            size_t output_offset = 0;
-
-            for (size_t i = 0; i < input.rank; i++) {
-                input_offset += shape[i] * input.strides[i];
-                output_offset += shape[i] * output.strides[i];
-            }
+            const size_t input_offset = tensor_offset(input, id);
+            const size_t output_offset = tensor_offset(output, id);
 
             // Reinterpret input and output pointers.
 
@@ -104,7 +92,7 @@ Result Duplicate<D, T>::createCompute(const Context& ctx) {
         kernel = std::regex_replace(kernel, std::regex(R"(\[\/\/OP\/\/\])"), operation);
     }
 
-    ctx.cuda->createKernel("duplicate", kernel);
+    ctx.cuda->createKernel("duplicate", kernel, {CUDA::KernelHeader::TENSOR});
 
     // Initialize kernel size.
 

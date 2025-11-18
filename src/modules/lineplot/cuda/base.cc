@@ -11,6 +11,14 @@ struct Lineplot<D, T>::Impl {
 
     std::vector<void*> argumentsLineplot;
 
+    struct Meta {
+        void* ptr;
+        size_t rank;
+        size_t shape[8];
+        size_t strides[8];
+    };
+
+    Meta inputMeta;
     Tensor<Device::CUDA, T> input;
 };
 
@@ -32,14 +40,31 @@ Result Lineplot<D, T>::createCompute(const Context& ctx) {
 
     // Create CUDA kernel.
 
-    ctx.cuda->createKernel("lineplot", R"""(
-        __global__ void lineplot(const float* input, float2* output, float normalizationFactor, size_t numberOfBatches, size_t numberOfElements, size_t averaging, size_t decimation) {
+    ctx.cuda->createKernel("lineplot",
+                           R"""(
+        #include "jetstream_tensor.cuh"
+        struct Meta {
+            void* ptr;
+            size_t rank;
+            size_t shape[8];
+            size_t strides[8];
+        };
+
+        __device__ inline float tensor_read(const Meta& meta, size_t index) {
+            size_t coords[JST_MAX_TENSOR_RANK];
+            jst_tensor_index(index, meta.rank, meta.shape, coords);
+            const auto* ptr = reinterpret_cast<const float*>(meta.ptr);
+            return ptr[jst_tensor_offset(coords, meta.strides, meta.rank)];
+        }
+
+        __global__ void lineplot(const Meta input, float2* output, float normalizationFactor, size_t numberOfBatches, size_t numberOfElements, size_t averaging, size_t decimation) {
             size_t id = blockIdx.x * blockDim.x + threadIdx.x;
             if (id < numberOfElements) {
                 // Compute average amplitude within a batch.
                 float amplitude = 0.0f;
                 for (size_t i = 0; i < numberOfBatches; ++i) {
-                    amplitude += input[(id * decimation) + (i * numberOfElements)];
+                    const size_t sampleIndex = (id * decimation) + (i * numberOfElements);
+                    amplitude += tensor_read(input, sampleIndex);
                 }
                 amplitude = (amplitude * normalizationFactor) - 1.0f;
 
@@ -53,7 +78,8 @@ Result Lineplot<D, T>::createCompute(const Context& ctx) {
                 output[id].y = average;
             }
         }
-    )""");
+    )""",
+                           {CUDA::KernelHeader::TENSOR});
 
     // Initialize kernel size.
 
@@ -71,10 +97,25 @@ Result Lineplot<D, T>::createCompute(const Context& ctx) {
         pimpl->input = input.buffer;
     }
 
+    {
+        auto& tensor = pimpl->input;
+        pimpl->inputMeta = {
+            reinterpret_cast<uint8_t*>(tensor.data()) + tensor.offset_bytes(),
+            tensor.rank(),
+            {},
+            {},
+        };
+
+        for (U64 i = 0; i < tensor.rank(); ++i) {
+            pimpl->inputMeta.shape[i] = tensor.shape()[i];
+            pimpl->inputMeta.strides[i] = tensor.stride()[i];
+        }
+    }
+
     // Initialize kernel arguments.
 
     pimpl->argumentsLineplot = {
-        pimpl->input.data_ptr(),
+        &pimpl->inputMeta,
         gimpl->signalPoints.data_ptr(),
         &gimpl->normalizationFactor,
         &gimpl->numberOfBatches,
