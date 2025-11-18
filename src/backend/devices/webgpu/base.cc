@@ -50,13 +50,16 @@ U64 WebGPU::getTotalProcessorCount() const {
 }
 
 bool WebGPU::getLowPowerStatus() const {
-    // TODO: Pool power status periodically.
-    return cache.lowPowerStatus;
+    // Power status monitoring not available in WebGPU/browser environment.
+    // Browser Battery Status API exists but requires async JS calls.
+    // Return false (not in low power mode) as a sensible default.
+    return false;
 }
 
 U64 WebGPU::getThermalState() const {
-    // TODO: Pool thermal state periodically.
-    return cache.getThermalState;
+    // Thermal state monitoring not available in WebGPU/browser environment.
+    // Return 0 (nominal thermal state) as a sensible default.
+    return 0;
 }
 
 }  // namespace Jetstream::Backend

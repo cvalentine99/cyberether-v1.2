@@ -3,6 +3,15 @@
 #include "jetstream/backend/devices/vulkan/base.hh"
 #include "jetstream/backend/devices/vulkan/helpers.hh"
 
+#if defined(JST_OS_MAC) || defined(JST_OS_IOS)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wgnu-anonymous-struct"
+#pragma GCC diagnostic ignored "-Wnested-anon-types"
+#pragma GCC diagnostic ignored "-Wdtor-name"
+#include "jetstream/backend/devices/metal/bindings.hpp"
+#pragma GCC diagnostic pop
+#endif
+
 namespace Jetstream::Backend {
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugMessageCallback(VkDebugReportFlagsEXT,
@@ -344,8 +353,7 @@ Vulkan::Vulkan(const Config& _config) : config(_config), cache({}) {
 
     cache.deviceName = properties.deviceName;
     cache.totalProcessorCount = std::thread::hardware_concurrency();
-    cache.getThermalState = 0;  // TODO: Wire implementation.
-    cache.lowPowerStatus = false;  // TODO: Wire implementation.
+    // Power and thermal state are queried dynamically in their getters.
 
     {
         uint32_t major = VK_VERSION_MAJOR(properties.apiVersion);
@@ -679,13 +687,32 @@ U64 Vulkan::getTotalProcessorCount() const {
 }
 
 bool Vulkan::getLowPowerStatus() const {
-    // TODO: Pool power status periodically.
-    return cache.lowPowerStatus;
+#if defined(JST_OS_MAC) || defined(JST_OS_IOS)
+    // Query actual power status from the system on Apple platforms.
+    NS::ProcessInfo* info = NS::ProcessInfo::processInfo();
+    bool lowPower = info->isLowPowerModeEnabled();
+    info->release();
+    return lowPower;
+#else
+    // Power status monitoring not available on this platform.
+    // Return false (not in low power mode) as a sensible default.
+    return false;
+#endif
 }
 
 U64 Vulkan::getThermalState() const {
-    // TODO: Pool thermal state periodically.
-    return cache.getThermalState;
+#if defined(JST_OS_MAC) || defined(JST_OS_IOS)
+    // Query actual thermal state from the system on Apple platforms.
+    // Values: 0=Nominal, 1=Fair, 2=Serious, 3=Critical
+    NS::ProcessInfo* info = NS::ProcessInfo::processInfo();
+    U64 thermal = info->thermalState();
+    info->release();
+    return thermal;
+#else
+    // Thermal state monitoring not available on this platform.
+    // Return 0 (nominal thermal state) as a sensible default.
+    return 0;
+#endif
 }
 
 }  // namespace Jetstream::Backend

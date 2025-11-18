@@ -49,8 +49,7 @@ class WebGPU {
         bool hasUnifiedMemory;
         U64 physicalMemory;
         U64 totalProcessorCount;
-        bool lowPowerStatus;
-        U64 getThermalState;
+        // Power and thermal state return defaults in browser environment.
     } cache;
 };
 

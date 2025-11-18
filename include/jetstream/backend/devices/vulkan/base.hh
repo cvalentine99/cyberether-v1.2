@@ -142,8 +142,7 @@ class Vulkan {
         bool hasUnifiedMemory;
         U64 physicalMemory;
         U64 totalProcessorCount;
-        bool lowPowerStatus;
-        U64 getThermalState;
+        // Power and thermal state are queried dynamically, not cached.
         bool canImportDeviceMemory;
         bool canImportHostMemory;
         bool canExportDeviceMemory;
