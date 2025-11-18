@@ -3,7 +3,69 @@
 
 #include <nvrtc.h>
 
+#include <unordered_set>
+
 namespace Jetstream {
+
+namespace {
+
+struct KernelHeaderDefinition {
+    CUDA::KernelHeader type;
+    const char* name;
+    const char* source;
+};
+
+constexpr char kComplexHeaderName[] = "jetstream_complex.cuh";
+constexpr char kComplexHeaderSource[] = R"(
+#ifndef JETSTREAM_COMPLEX_HEADER
+#define JETSTREAM_COMPLEX_HEADER
+
+__device__ inline float2 jst_complex_make(float real, float imag) {
+    return float2{real, imag};
+}
+
+__device__ inline float2 jst_complex_add(const float2& lhs, const float2& rhs) {
+    return float2{lhs.x + rhs.x, lhs.y + rhs.y};
+}
+
+__device__ inline float2 jst_complex_mul(const float2& lhs, const float2& rhs) {
+    return float2{
+        (lhs.x * rhs.x) - (lhs.y * rhs.y),
+        (lhs.x * rhs.y) + (lhs.y * rhs.x)
+    };
+}
+
+__device__ inline float2 jst_complex_scale(const float2& value, float scalar) {
+    return float2{value.x * scalar, value.y * scalar};
+}
+
+__device__ inline float jst_complex_abs(const float2& value) {
+    return sqrtf((value.x * value.x) + (value.y * value.y));
+}
+
+__device__ inline float2 jst_complex_conj(const float2& value) {
+    return float2{value.x, -value.y};
+}
+
+#endif  // JETSTREAM_COMPLEX_HEADER
+)";
+
+constexpr KernelHeaderDefinition kComplexHeaderDefinition{
+    CUDA::KernelHeader::COMPLEX,
+    kComplexHeaderName,
+    kComplexHeaderSource,
+};
+
+const KernelHeaderDefinition* FindHeaderDefinition(CUDA::KernelHeader header) {
+    switch (header) {
+        case CUDA::KernelHeader::COMPLEX:
+            return &kComplexHeaderDefinition;
+        default:
+            return nullptr;
+    }
+}
+
+}  // namespace
 
 struct CUDA::Impl {
     struct Kernel {
@@ -128,7 +190,7 @@ Result CUDA::destroy() {
 
 Result CUDA::createKernel(const std::string& name, 
                           const std::string& source,
-                          const std::vector<KernelHeader>&) {
+                          const std::vector<KernelHeader>& headers) {
     if (pimpl->kernels[pimpl->block_in_context].contains(name)) {
         JST_ERROR("[CUDA] Kernel with name '{}' already exists.", name);
     }
@@ -136,14 +198,37 @@ Result CUDA::createKernel(const std::string& name,
 
     // Create program.
 
+    std::vector<const char*> headerSourcePtrs;
+    std::vector<const char*> headerNamePtrs;
+    headerSourcePtrs.reserve(headers.size());
+    headerNamePtrs.reserve(headers.size());
+
+    std::unordered_set<KernelHeader> uniqueHeaders;
+    for (const auto& header : headers) {
+        if (header == KernelHeader::NONE) {
+            continue;
+        }
+        if (!uniqueHeaders.insert(header).second) {
+            continue;
+        }
+        const auto* definition = FindHeaderDefinition(header);
+        if (!definition) {
+            JST_WARN("[CUDA] Unknown kernel header requested: {}", static_cast<int>(header));
+            continue;
+        }
+        headerSourcePtrs.push_back(definition->source);
+        headerNamePtrs.push_back(definition->name);
+    }
+
     nvrtcProgram program;
-    JST_NVRTC_CHECK(nvrtcCreateProgram(&program, source.c_str(), nullptr, 0, nullptr, nullptr), [&]{
+    JST_NVRTC_CHECK(nvrtcCreateProgram(&program,
+                                       source.c_str(),
+                                       nullptr,
+                                       headerSourcePtrs.size(),
+                                       headerSourcePtrs.empty() ? nullptr : headerSourcePtrs.data(),
+                                       headerNamePtrs.empty() ? nullptr : headerNamePtrs.data()), [&]{
         JST_ERROR("[CUDA] Can't create program: {}", err);
     });
-
-    // Load headers into program.
-
-    // TODO: Implement header loading.
 
     // Add name expression.
 
