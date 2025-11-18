@@ -31,11 +31,11 @@
 | `src/backend/devices/webgpu/base.cc` | 53 | "Pool power status periodically" | ✅ RESOLVED | 1f2e8f3 |
 | `src/backend/devices/webgpu/base.cc` | 58 | "Pool thermal state periodically" | ✅ RESOLVED | 1f2e8f3 |
 | `include/jetstream/blocks/*` | various | "Add decent block description..." (33 items) | ✅ RESOLVED | 8bcdff0 |
-| `include/jetstream/blocks/note.hh` | 63 | "Add support for markdown with links/images" | ✅ RESOLVED | WORKTREE |
-| `include/jetstream/blocks/note.hh` | 83 | "Implement automatic line wrapping" | ✅ RESOLVED | WORKTREE |
-| `include/jetstream/blocks/file_writer.hh` | 99 | "Parse input buffer for sample rate/center freq" | ✅ RESOLVED | WORKTREE |
-| `include/jetstream/blocks/spectroscope.hh` | 344 | "Add support for zoom and translation" | ✅ RESOLVED | WORKTREE |
-| `include/jetstream/blocks/waterfall.hh` | 124 | "Upgrade zoom/panning API" | ✅ RESOLVED | WORKTREE |
+| `include/jetstream/blocks/note.hh` | 63 | "Add support for markdown with links/images" | ✅ RESOLVED | 1f3e141 |
+| `include/jetstream/blocks/note.hh` | 83 | "Implement automatic line wrapping" | ✅ RESOLVED | 1f3e141 |
+| `include/jetstream/blocks/file_writer.hh` | 99 | "Parse input buffer for sample rate/center freq" | ✅ RESOLVED | 1f3e141 |
+| `include/jetstream/blocks/spectroscope.hh` | 344 | "Add support for zoom and translation" | ✅ RESOLVED | 1f3e141 |
+| `include/jetstream/blocks/waterfall.hh` | 124 | "Upgrade zoom/panning API" | ✅ RESOLVED | 1f3e141 |
 
 **Total Resolved This Session:** 26 TODOs (previous 21 + 5 editor improvements)
 
