@@ -682,34 +682,23 @@ Result Superluminal::Impl::createGraph() {
 
         if (isComplexBuffer) {
             // Complex signal path - needs windowing, inversion, and multiplication
-            if (config.preferredDevice == Device::CPU) {
-                auto blob = GraphToYaml({
-                    {"win",
-                        {"window", GetDeviceName(config.preferredDevice), {"CF32"},
-                            {{"size", jst::fmt::format("{}", prototype.size())}}, {}}},
-                    {"inv",
-                        {"invert", GetDeviceName(config.preferredDevice), {"CF32"}, {},
-                            {{"buffer", "${graph.win.output.window}"}}}},
-                    {"win_mul",
-                        {"multiply", GetDeviceName(config.preferredDevice), {"CF32"}, {},
-                            {{"factorA", jst::fmt::format("${{graph.data_{}_{}_{}.output.buffer}}", GetDeviceName(config.preferredDevice), sourceDomain, hash)},
-                            {"factorB", "${graph.inv.output.buffer}"}}}},
-                    {jst::fmt::format("data_{}_{}_{}", GetDeviceName(config.preferredDevice), conversionDomain, hash),
-                        {"fft", GetDeviceName(config.preferredDevice), {"CF32", "CF32"},
-                            {{"forward", jst::fmt::format("{}", (forward) ? "true" : "false")}},
-                            {{"buffer", "${graph.win_mul.output.product}"}}}},
-                });
-                instance.flowgraph().importFromBlob(blob);
-            } else {
-                // TODO: The Multiply block doesn't support CUDA yet. This is a temporary bypass.
-                auto blob = GraphToYaml({
-                    {jst::fmt::format("data_{}_{}_{}", GetDeviceName(config.preferredDevice), conversionDomain, hash),
-                        {"fft", GetDeviceName(config.preferredDevice), {"CF32", "CF32"},
-                            {{"forward", jst::fmt::format("{}", (forward) ? "true" : "false")}},
-                            {{"buffer",  jst::fmt::format("${{graph.data_{}_{}_{}.output.buffer}}", GetDeviceName(config.preferredDevice), sourceDomain, hash)}}}},
-                });
-                instance.flowgraph().importFromBlob(blob);
-            }
+            auto blob = GraphToYaml({
+                {"win",
+                    {"window", GetDeviceName(config.preferredDevice), {"CF32"},
+                        {{"size", jst::fmt::format("{}", prototype.size())}}, {}}},
+                {"inv",
+                    {"invert", GetDeviceName(config.preferredDevice), {"CF32"}, {},
+                        {{"buffer", "${graph.win.output.window}"}}}},
+                {"win_mul",
+                    {"multiply", GetDeviceName(config.preferredDevice), {"CF32"}, {},
+                        {{"factorA", jst::fmt::format("${{graph.data_{}_{}_{}.output.buffer}}", GetDeviceName(config.preferredDevice), sourceDomain, hash)},
+                        {"factorB", "${graph.inv.output.buffer}"}}}},
+                {jst::fmt::format("data_{}_{}_{}", GetDeviceName(config.preferredDevice), conversionDomain, hash),
+                    {"fft", GetDeviceName(config.preferredDevice), {"CF32", "CF32"},
+                        {{"forward", jst::fmt::format("{}", (forward) ? "true" : "false")}},
+                        {{"buffer", "${graph.win_mul.output.product}"}}}},
+            });
+            instance.flowgraph().importFromBlob(blob);
         } else {
             // Real signal path - direct FFT without windowing for domain conversion
             auto blob = GraphToYaml({

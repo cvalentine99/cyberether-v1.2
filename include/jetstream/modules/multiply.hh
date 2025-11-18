@@ -17,6 +17,10 @@ namespace Jetstream {
 #define JST_MULTIPLY_METAL(MACRO) \
     MACRO(Multiply, Metal, CF32)
 
+#define JST_MULTIPLY_CUDA(MACRO) \
+    MACRO(Multiply, CUDA, CF32) \
+    MACRO(Multiply, CUDA, F32)
+
 template<Device D, typename T = CF32>
 class Multiply : public Module, public Compute {
  public:
@@ -99,6 +103,9 @@ JST_MULTIPLY_CPU(JST_SPECIALIZATION);
 #endif
 #ifdef JETSTREAM_MODULE_MULTIPLY_METAL_AVAILABLE
 JST_MULTIPLY_METAL(JST_SPECIALIZATION);
+#endif
+#ifdef JETSTREAM_MODULE_MULTIPLY_CUDA_AVAILABLE
+JST_MULTIPLY_CUDA(JST_SPECIALIZATION);
 #endif
 
 }  // namespace Jetstream
