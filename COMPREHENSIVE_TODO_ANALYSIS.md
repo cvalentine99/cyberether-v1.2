@@ -2,7 +2,7 @@
 
 **Generated:** November 18, 2025
 **Status:** Active Development - Beta 1 Phase
-**Total TODOs (excluding third-party):** ~141 remaining (down from 161)
+**Total TODOs (excluding third-party):** ~113 remaining (down from 161)
 
 ---
 
@@ -30,8 +30,9 @@
 | `src/backend/devices/vulkan/base.cc` | 687 | "Pool thermal state periodically" | ✅ RESOLVED | 1f2e8f3 |
 | `src/backend/devices/webgpu/base.cc` | 53 | "Pool power status periodically" | ✅ RESOLVED | 1f2e8f3 |
 | `src/backend/devices/webgpu/base.cc` | 58 | "Pool thermal state periodically" | ✅ RESOLVED | 1f2e8f3 |
+| `include/jetstream/blocks/*` | various | "Add decent block description..." (33 items) | ✅ RESOLVED | 8bcdff0 |
 
-**Total Resolved This Session:** 20 TODOs (10 + 4 low-impact + 6 monitoring)
+**Total Resolved This Session:** 21 TODOs (10 + 4 low-impact + 6 monitoring + 1 documentation batch)
 
 ---
 
@@ -64,22 +65,14 @@ These are explicitly tagged for Beta 1 completion:
 
 ## 📊 TODO Breakdown by Category
 
-### 1. Documentation (33 TODOs) - LOW PRIORITY
+### 1. Documentation (5 TODOs) - LOW PRIORITY
 
-**Block Descriptions Missing:** All blocks functional, just need user-facing docs
-
-Files affected (all `include/jetstream/blocks/*.hh`):
-- agc, amplitude, arithmetic, audio, constellation, duplicate
-- expand_dims, fft, file_reader, file_writer, filter, filter_engine
-- filter_taps, fm, fold, invert, lineplot, multiply, multiply_constant
-- overlap_add, pad, remote, reshape, scale, soapy, spectrogram
-- spectroscope, squeeze_dims, throttle, unpad, waterfall, window
-- Plus: `src/superluminal/dmi_block.hh`
-
-**Additional Documentation:**
+Remaining documentation tasks:
 - `include/jetstream/blocks/note.hh:63` - Add markdown support with links/images
 - `include/jetstream/blocks/note.hh:83` - Implement automatic line wrapping
 - `include/jetstream/blocks/file_writer.hh:99` - Parse input buffer for sample rate/center freq
+- `include/jetstream/blocks/spectroscope.hh:344` - Document/implement zoom & translation UX
+- `include/jetstream/blocks/waterfall.hh:124` - Document upgraded zoom/panning API
 
 ---
 
