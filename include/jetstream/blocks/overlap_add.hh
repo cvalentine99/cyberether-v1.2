@@ -70,8 +70,10 @@ class OverlapAdd : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Sums the overlap data with the buffer data along the specified axis.";
+        return "Implements the overlap-add method by combining current buffer data with overlap from previous processing blocks. "
+               "Takes two input tensors (buffer and overlap) and outputs their sum along a specified axis for continuous block processing. "
+               "Configurable axis parameter determines which dimension the overlap operation is performed on. "
+               "Essential component of frequency-domain filtering that maintains signal continuity across FFT block boundaries.";
     }
 
     // Constructor

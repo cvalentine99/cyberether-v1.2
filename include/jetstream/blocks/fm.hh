@@ -69,8 +69,10 @@ class FM : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Demodulates a complex-valued frequency modulated signal.";
+        return "Demodulates frequency modulated (FM) signals by computing the instantaneous frequency from complex I/Q samples. "
+               "Takes a complex-valued input tensor and outputs a real-valued audio signal representing the demodulated information. "
+               "Requires configuration of the sample rate to properly scale the output frequency deviation. "
+               "Commonly used for receiving FM broadcast radio, NBFM voice communications, and other frequency-modulated transmissions.";
     }
 
     // Constructor

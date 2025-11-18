@@ -70,8 +70,10 @@ class Lineplot : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Visualizes input data in a line graph format, suitable for time-domain signals and waveform displays.";
+        return "Renders real-valued data as an interactive line plot with configurable averaging, decimation, and zoom capabilities. "
+               "Takes a real-valued input tensor and produces a graphical visualization with grid lines and pan/zoom controls. "
+               "Supports adjustable averaging for noise reduction, decimation for performance, and interactive navigation of the waveform. "
+               "Ideal for displaying time-domain signals, demodulated audio, or frequency-domain amplitude data in SDR applications.";
     }
 
     // Constructor

@@ -67,8 +67,10 @@ class Amplitude : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Calculates the amplitude of a complex signal.";
+        return "Computes the magnitude (amplitude) of a complex signal by calculating the absolute value "
+               "of each complex sample. Takes a complex-valued input tensor and outputs a real-valued tensor "
+               "where each element represents the magnitude sqrt(real² + imag²). Commonly used to convert "
+               "I/Q data to signal strength for visualization and analysis.";
     }
 
     // Constructor

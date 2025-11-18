@@ -69,8 +69,10 @@ class MultiplyConstant : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Takes 'factor' as input and multiplied it with the const value producing the result as 'product'.";
+        return "Multiplies an input tensor by a configurable constant scalar value for amplitude scaling or attenuation. "
+               "Takes a real-valued input factor and outputs the product after multiplication by the configured constant. "
+               "The constant multiplier can be adjusted at runtime and persists across processing cycles. "
+               "Useful for gain control, signal normalization, and amplitude adjustments in real-valued signal processing chains.";
     }
 
     // Constructor

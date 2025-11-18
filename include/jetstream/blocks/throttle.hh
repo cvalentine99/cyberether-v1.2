@@ -69,8 +69,10 @@ class Throttle : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Throttles the flow of tensor data by only allowing data to pass through at specified time intervals. The interval is specified in milliseconds and accounts for execution time to maintain accurate timing.";
+        return "Rate-limits data flow by enforcing a minimum time interval between consecutive buffer outputs. "
+               "Takes an input tensor and passes it through unchanged, but blocks subsequent data until the configured interval elapses. "
+               "Configurable interval in milliseconds accounts for processing time to maintain accurate update rates. "
+               "Essential for controlling visualization refresh rates, reducing CPU usage, and simulating real-time data rates from file sources.";
     }
 
     // Constructor

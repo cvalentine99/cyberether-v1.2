@@ -75,8 +75,10 @@ class Unpad : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Removes padding from the end of a tensor along a given axis.";
+        return "Removes a specified number of elements from the end of a tensor along a given axis, separating them as overlap data. "
+               "Takes a padded input tensor and outputs two tensors: the main unpadded portion and the removed padding segment. "
+               "Configurable size and axis parameters control how many elements are removed and from which dimension. "
+               "Used in overlap-add filtering to extract the overlap region that will be summed with the next block's output.";
     }
 
     // Constructor

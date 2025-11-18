@@ -72,8 +72,10 @@ class Reshape : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Reshapes a tensor to a new shape. Similar to Numpy's reshape.";
+        return "Reconfigures tensor dimensions without changing the underlying data layout or total element count. "
+               "Takes an input tensor and outputs a view with a different shape specified as a bracket-enclosed dimension list. "
+               "Operates similarly to NumPy's reshape function, requiring the new shape to maintain the same total number of elements. "
+               "Useful for converting between 1D and 2D representations or adjusting batch dimensions in signal processing pipelines.";
     }
 
     // Constructor

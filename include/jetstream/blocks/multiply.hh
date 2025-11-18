@@ -68,8 +68,10 @@ class Multiply : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Takes 'factorA' and 'factorB' as inputs and outputs the result as 'product'.";
+        return "Performs element-wise multiplication of two input tensors, supporting complex or real-valued data. "
+               "Takes two input tensors (factorA and factorB) with compatible shapes and outputs their element-wise product. "
+               "Supports broadcasting for scalar multiplication and handles complex multiplication with proper I/Q component handling. "
+               "Used for signal mixing, frequency shifting, windowing, and amplitude modulation in signal processing chains.";
     }
 
     // Constructor

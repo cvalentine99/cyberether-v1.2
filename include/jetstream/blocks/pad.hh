@@ -70,8 +70,10 @@ class Pad : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Adds padding to the end of a tensor along a given axis.";
+        return "Appends zero-valued padding to a tensor along a specified axis to extend its size for processing requirements. "
+               "Takes an unpadded input tensor and outputs a padded version with zeros added at the end of the selected dimension. "
+               "Configurable size and axis parameters control how much padding is added and to which dimension. "
+               "Used in FFT operations and filtering to meet block size requirements and prevent circular convolution artifacts.";
     }
 
     // Constructor

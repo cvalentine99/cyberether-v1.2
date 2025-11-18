@@ -64,8 +64,10 @@ class Spectrogram : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Visualizes how frequencies of input data change over time. Represents amplitude of frequencies using color.";
+        return "Renders a time-frequency representation showing how spectral content evolves over time as a 2D color-coded image. "
+               "Takes real-valued frequency-domain data and accumulates it vertically to create a scrolling spectrogram display. "
+               "Configurable height determines how many historical frames are retained in the vertical time axis. "
+               "Provides intuitive visualization of signal dynamics, modulation patterns, and time-varying spectral characteristics in SDR applications.";
     }
 
     // Constructor

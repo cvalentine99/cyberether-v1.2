@@ -64,8 +64,10 @@ class Constellation : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Visualizes modulated data in a 2D scatter plot. Commonly used in digital communication to represent symbol modulation.";
+        return "Displays complex I/Q samples as a 2D scatter plot (constellation diagram), where the real component "
+               "maps to the X-axis and the imaginary component to the Y-axis. Takes a complex-valued input tensor and "
+               "renders it as points on an interactive plot. Essential for analyzing digital modulation schemes like "
+               "QPSK, QAM, and PSK, helping visualize signal quality, phase noise, and symbol distribution.";
     }
 
     // Constructor

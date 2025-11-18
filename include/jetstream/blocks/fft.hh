@@ -69,8 +69,10 @@ class FFT : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Fast Fourier Transform that converts time-domain data to its frequency components. Supports real and complex data types.";
+        return "Performs a Fast Fourier Transform (FFT) to convert time-domain signals to frequency-domain representation. "
+               "Takes a complex or real-valued input tensor and outputs a complex frequency spectrum. Supports configurable "
+               "direction (forward/inverse) for transforming between time and frequency domains. Used extensively for spectral "
+               "analysis, filtering, and frequency-domain signal processing in SDR applications.";
     }
 
     // Constructor

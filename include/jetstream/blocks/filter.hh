@@ -73,8 +73,10 @@ class Filter : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "The Filter module creates Finite Impulse Response (FIR) bandpass filter coefficients (taps) based on specified frequency parameters. These taps can be used to filter input data, attenuating or amplifying certain frequency components.";
+        return "Applies a configurable Finite Impulse Response (FIR) bandpass filter to input signals using frequency-domain convolution. "
+               "Takes a complex or real-valued input tensor and outputs a filtered version with frequency components outside the passband attenuated. "
+               "Combines filter tap generation and filtering engine internally, supporting configurable center frequency, bandwidth, sample rate, and tap count. "
+               "Essential for channel selection, interference rejection, and bandwidth limiting in SDR applications.";
     }
 
     // Constructor

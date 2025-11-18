@@ -67,8 +67,10 @@ class Invert : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Inverts the complex-valued input signal. Useful for ploting the spectrum of a signal.";
+        return "Performs FFT shift operation by swapping the left and right halves of the input tensor along its last axis. "
+               "Takes a complex-valued input and outputs a rearranged version with DC component centered instead of at the edges. "
+               "Essential preprocessing step for proper visualization of FFT spectra where negative frequencies appear on the left. "
+               "Commonly used before spectral visualization blocks to produce intuitive frequency-domain displays in SDR applications.";
     }
 
     // Constructor

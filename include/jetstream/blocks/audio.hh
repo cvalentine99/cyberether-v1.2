@@ -73,8 +73,10 @@ class Audio : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Downsamples the input to the output sample rate and plays it on the speaker.";
+        return "Routes audio data to a system playback device with sample rate conversion. Takes a real-valued "
+               "input tensor and resamples it from the input sample rate to the output sample rate before playback. "
+               "Supports device selection and automatic rate matching. Internally uses a linear resampler and "
+               "circular buffer for smooth playback on the selected audio device.";
     }
 
     // Constructor

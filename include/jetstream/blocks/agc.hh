@@ -67,8 +67,10 @@ class AGC : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Adjusts the gain of the input signal to a constant level.";
+        return "Automatic Gain Control (AGC) dynamically adjusts the gain of the input signal "
+               "to maintain a consistent output amplitude. Takes a complex or real-valued tensor "
+               "as input and produces an output tensor of the same type with normalized amplitude. "
+               "Useful for stabilizing signal levels in SDR applications and audio processing.";
     }
 
     // Constructor

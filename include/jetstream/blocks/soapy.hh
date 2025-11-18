@@ -80,8 +80,10 @@ class Soapy : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Provides an interface to communicate and control SoapySDR supported devices, facilitating data acquisition and device configuration.";
+        return "Interfaces with SoapySDR-compatible software-defined radio hardware to receive I/Q sample streams. "
+               "Outputs complex-valued tensors containing baseband samples at configurable center frequency and sample rate. "
+               "Supports automatic device discovery, tuner control, automatic gain control, and buffer management for various SDR devices. "
+               "Serves as the primary RF input block for RTL-SDR, HackRF, LimeSDR, PlutoSDR, and other SoapySDR-supported hardware.";
     }
 
     // Constructor

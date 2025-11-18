@@ -67,8 +67,10 @@ class Waterfall : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Visualizes frequency-domain data over time in a 2D color-coded format. Suitable for spectral analysis.";
+        return "Displays frequency-domain data as a scrolling color-coded waterfall plot with interactive zoom and pan controls. "
+               "Takes real-valued spectral data and accumulates it vertically with configurable history depth and optional interpolation. "
+               "Supports horizontal zoom, offset adjustment, and smooth interpolation for enhanced visual quality. "
+               "Provides intuitive real-time visualization of signal activity, interference patterns, and spectral occupancy in SDR applications.";
     }
 
     // Constructor

@@ -52,8 +52,10 @@ class DynamicMemoryImport : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Dynamically imports an external tensor.";
+        return "Provides a source block that wraps externally allocated tensor memory for dynamic data injection into the processing pipeline. "
+               "Takes a pre-configured tensor from external sources and makes it available as a block output without copying data. "
+               "Enables integration with external libraries, shared memory regions, or dynamically generated data sources. "
+               "Used primarily in the Superluminal interface for importing tensors from external applications or memory-mapped devices.";
     }
 
     // Constructor

@@ -69,8 +69,10 @@ class ExpandDims : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Expands the dimensions of a tensor. Similar to numpy.expand_dims().";
+        return "Inserts a new dimension of size 1 at a specified axis position in the tensor shape. Takes an input "
+               "tensor and produces an output with one additional dimension. Similar to NumPy's expand_dims(), this is "
+               "useful for broadcasting operations, batch processing, or adapting tensor shapes to match expected "
+               "input dimensions for subsequent blocks in the processing chain.";
     }
 
     // Constructor

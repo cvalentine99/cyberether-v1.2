@@ -71,8 +71,10 @@ class Arithmetic : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Performs arithmetic operations on a signal.";
+        return "Performs element-wise arithmetic operations (add, subtract, multiply, divide) on tensor data "
+               "along a specified axis. Supports operations like summing, averaging, or finding min/max across "
+               "dimensions. The 'squeeze' option removes the reduced dimension from the output. Useful for "
+               "signal reduction, statistical analysis, and multi-channel processing.";
     }
 
     // Constructor

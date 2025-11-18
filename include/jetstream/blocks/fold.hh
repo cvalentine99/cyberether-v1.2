@@ -71,8 +71,10 @@ class Fold : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Folds the input signal along the specified axis.";
+        return "Extracts and resamples a specific segment from a tensor along a given axis, effectively implementing frequency-domain resampling. "
+               "Takes an input tensor and outputs a smaller tensor by selecting a contiguous block defined by offset and size parameters. "
+               "Configurable axis, offset, and output size allow precise control over which portion of data is extracted. "
+               "Primarily used within the filter engine for efficient channelization and bandwidth reduction in frequency-domain processing.";
     }
 
     // Constructor

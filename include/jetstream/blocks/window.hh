@@ -67,8 +67,10 @@ class Window : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Renerate a Butterworth window of the specified length and order.";
+        return "Generates a Blackman-Harris window function of specified length for spectral analysis applications. "
+               "Produces a real-valued output tensor containing window coefficients designed to reduce spectral leakage. "
+               "Configurable size parameter determines the window length, typically matching the FFT size. "
+               "Applied to time-domain signals before FFT to minimize artifacts and improve frequency resolution in spectral analysis.";
     }
 
     // Constructor

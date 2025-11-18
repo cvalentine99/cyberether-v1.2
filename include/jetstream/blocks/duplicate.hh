@@ -69,10 +69,11 @@ class Duplicate : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Duplicates the input signal by copying it to the output buffer. "
-               "This block also converts non-contiguous input buffers to contiguous output buffers. "
-               "This block is also useful to transfer data between host and device with the `Host Acessible` option.";
+        return "Creates a contiguous copy of the input tensor in memory. Takes an input tensor (which may be "
+               "non-contiguous due to slicing or views) and produces an output tensor with guaranteed contiguous "
+               "memory layout. The 'Host Accessible' option enables efficient data transfer between device and host "
+               "memory. Essential for preparing data for operations requiring sequential memory access and for "
+               "breaking dependencies in the computation graph.";
     }
 
     // Constructor

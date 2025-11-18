@@ -69,8 +69,10 @@ class SqueezeDims : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Squeezes the dimensions of a tensor. Similar to numpy.squeeze().";
+        return "Removes singleton dimensions (dimensions of size 1) from a tensor along a specified axis. "
+               "Takes an input tensor and outputs a tensor with reduced rank by eliminating the specified dimension. "
+               "Operates similarly to NumPy's squeeze function, requiring the target axis to have size exactly equal to 1. "
+               "Useful for simplifying tensor shapes when batch dimensions or other singleton axes are no longer needed in the pipeline.";
     }
 
     // Constructor

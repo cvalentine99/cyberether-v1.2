@@ -74,8 +74,10 @@ class FileReader : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Reads a signal from a file.";
+        return "Streams signal data from files in various formats including raw binary, WAV, and SigMF. Supports "
+               "configurable output shapes, playback modes (once or loop), and real-time streaming. Displays file "
+               "position and progress during playback. Essential for replaying captured signals, testing processing "
+               "chains with recorded data, and working with stored RF datasets.";
     }
 
     // Constructor

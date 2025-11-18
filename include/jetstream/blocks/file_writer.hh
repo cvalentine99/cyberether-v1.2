@@ -72,8 +72,10 @@ class FileWriter : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Writes a signal to a file.";
+        return "Records signal data to disk in various formats including raw binary, WAV, and SigMF with comprehensive "
+               "metadata. Takes an input tensor and writes it continuously to the specified file path with configurable "
+               "sample rate and center frequency information. Supports description, author, and name metadata fields for "
+               "proper signal documentation. Useful for capturing RF signals, creating test datasets, and archiving processed data.";
     }
 
     // Constructor

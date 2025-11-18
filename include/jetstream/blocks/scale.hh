@@ -69,8 +69,10 @@ class Scale : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Multiplies each data point in the input by a specified scaling factor, adjusting its magnitude.";
+        return "Converts linear amplitude values to logarithmic dB scale with configurable dynamic range for visualization. "
+               "Takes real-valued input data and outputs scaled values mapped to a specified dBFS range (typically -300 to 0 dB). "
+               "Configurable minimum and maximum range parameters control the mapping of input amplitudes to display values. "
+               "Essential preprocessing for spectral displays, converting wide dynamic range signals into human-readable logarithmic representations.";
     }
 
     // Constructor

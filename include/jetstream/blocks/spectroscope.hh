@@ -82,8 +82,10 @@ class Spectroscope : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "High-level visualization for time-domain signals.";
+        return "Comprehensive frequency-domain visualization combining FFT processing with multiple display modes (spectrogram, lineplot, waterfall). "
+               "Takes complex time-domain input, applies windowing and AGC, transforms to frequency domain, and renders selectable visualizations. "
+               "Internally chains window function, FFT, amplitude calculation, and scaling modules before feeding visualization blocks. "
+               "Provides a complete spectral analysis solution with configurable dB range and simultaneous multi-view display options.";
     }
 
     // Constructor

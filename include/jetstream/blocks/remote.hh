@@ -62,8 +62,10 @@ class Remote : public Block {
     }
 
     std::string description() const {
-        // TODO: Add decent block description describing internals and I/O.
-        return "Opens a remote view to a CyberEther instance via the network. This allows viewing and controlling the instance from a different computer.";
+        return "Establishes a network connection to stream the GUI interface to remote clients for viewing and interaction. "
+               "Captures the framebuffer, encodes it with video compression, and transmits it along with input events over the network. "
+               "Supports configurable endpoint addresses and view resolution with bidirectional mouse, keyboard, and scroll event handling. "
+               "Enables headless operation and remote monitoring of SDR systems from any networked device with minimal latency.";
     }
 
     // Constructor
