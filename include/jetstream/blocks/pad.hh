@@ -116,7 +116,7 @@ class Pad : public Block {
                 config.axis = static_cast<U64>(axis);
 
                 JST_DISPATCH_ASYNC([&](){
-                    ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                     JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                 });
             }
@@ -133,7 +133,7 @@ class Pad : public Block {
                 config.size = static_cast<U64>(size);
 
                 JST_DISPATCH_ASYNC([&](){
-                    ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                     JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                 });
             }

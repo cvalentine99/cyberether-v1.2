@@ -126,7 +126,7 @@ class Audio : public Block {
             config.inSampleRate = inSampleRate * 1e6;
 
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                 JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
             });
         }
@@ -143,7 +143,7 @@ class Audio : public Block {
             config.channels = static_cast<U32>(channels);
 
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                 JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
             });
         }
@@ -161,7 +161,7 @@ class Audio : public Block {
                     config.deviceName = device;
 
                     JST_DISPATCH_ASYNC([&](){
-                        ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                         ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                         JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                     });
                 }
@@ -179,7 +179,7 @@ class Audio : public Block {
         const F32 fullWidth = ImGui::GetContentRegionAvail().x;
         if (ImGui::Button("Reload Device List", ImVec2(fullWidth, 0))) {
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading device list..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading device list..." });  // TODO: Re-enable when imgui-notify is available
                 availableDeviceList = AudioModule::ListAvailableDevices();
                 JST_CHECK_NOTIFY(Result::SUCCESS);
             });

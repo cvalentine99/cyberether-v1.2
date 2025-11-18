@@ -113,7 +113,7 @@ class FM : public Block {
             config.sampleRate = sampleRate * 1e6;
 
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                 JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
             });
         }

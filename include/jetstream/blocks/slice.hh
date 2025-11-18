@@ -227,7 +227,7 @@ class Slice : public Block {
         ImGui::SetNextItemWidth(-1);
         if (ImGui::InputText("##slice", &config.slice, ImGuiInputTextFlags_EnterReturnsTrue)) {
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                 JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
             });
         }
@@ -239,7 +239,7 @@ class Slice : public Block {
         ImGui::SetNextItemWidth(-1);
         if (ImGui::Checkbox("##contiguous", &config.contiguous)) {
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                 JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
             });
         }

@@ -252,7 +252,7 @@ class FileWriter : public Block {
                 config.recording = true;
 
                 JST_DISPATCH_ASYNC([&](){
-                    ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Starting recording..." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Starting recording..." });  // TODO: Re-enable when imgui-notify is available
                     JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                 });
             }

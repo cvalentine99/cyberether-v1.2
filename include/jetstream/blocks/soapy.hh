@@ -195,7 +195,7 @@ class Soapy : public Block {
             config.numberOfTimeSamples = static_cast<U64>(taps[1]);
 
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                 JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
             });
         }
@@ -241,7 +241,7 @@ class Soapy : public Block {
                     config.deviceString = device.toString();
 
                     JST_DISPATCH_ASYNC([&](){
-                        ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                         ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                         JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                     });
                 }
@@ -258,7 +258,7 @@ class Soapy : public Block {
         const F32 fullWidth = ImGui::GetContentRegionAvail().x;
         if (ImGui::Button("Reload Device List", ImVec2(fullWidth, 0))) {
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading device list..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading device list..." });  // TODO: Re-enable when imgui-notify is available
                 availableDeviceList = SoapyModule::ListAvailableDevices(config.hintString);
                 JST_CHECK_NOTIFY(Result::SUCCESS);
             });

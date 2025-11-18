@@ -131,7 +131,7 @@ class Filter : public Block {
             config.sampleRate = sampleRate * JST_MHZ;
 
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                 JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
             });
         }
@@ -146,7 +146,7 @@ class Filter : public Block {
             config.bandwidth = bandwidth * JST_MHZ;
 
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                 JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
             });
         }
@@ -161,7 +161,7 @@ class Filter : public Block {
             config.taps = static_cast<U64>(taps);
 
             JST_DISPATCH_ASYNC([&](){
-                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                 JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
             });
         }
@@ -177,7 +177,7 @@ class Filter : public Block {
                 config.center.resize(heads);
 
                 JST_DISPATCH_ASYNC([&](){
-                    ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                     JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                 });
             }
@@ -195,7 +195,7 @@ class Filter : public Block {
                 config.center[i] = center * JST_MHZ;
 
                 JST_DISPATCH_ASYNC([&](){
-                    ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                     JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                 });
             }

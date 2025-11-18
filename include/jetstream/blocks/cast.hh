@@ -141,7 +141,7 @@ class Cast : public Block {
                     config.scaler = scaler;
 
                     JST_DISPATCH_ASYNC([&](){
-                        ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                         ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                         JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                     });
                 }

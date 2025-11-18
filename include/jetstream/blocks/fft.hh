@@ -114,7 +114,7 @@ class FFT : public Block {
             if (ImGui::Selectable(forward, config.forward)) {
                 config.forward = true;
                 JST_DISPATCH_ASYNC([&](){
-                    ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                     JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                 });
             }
@@ -125,7 +125,7 @@ class FFT : public Block {
             if (ImGui::Selectable(backwards, !config.forward)) {
                 config.forward = false;
                 JST_DISPATCH_ASYNC([&](){
-                    ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
                     JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
                 });
             }
