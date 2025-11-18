@@ -8,10 +8,10 @@ This document tracks all fixes and improvements applied during the current devel
 
 **Date:** November 18, 2025
 **Branch:** main
-**Commits Made:** 5
-**Files Modified:** 43
-**TODOs Resolved:** 42
-**Status:** ✅ All changes committed and compiled locally (ccache disabled due to tmp perms)
+**Commits Made:** 6 (+1 pending docs)
+**Files Modified:** 46
+**TODOs Resolved:** 43
+**Status:** ✅ Latest code commits built locally (`CCACHE_DISABLE=1 meson compile -C build`) — block docs still pending
 
 ---
 
@@ -192,6 +192,30 @@ This document tracks all fixes and improvements applied during the current devel
 
 ---
 
+### 7. Expand CUDA Header Library and Refactor Arithmetic Kernel
+**Commit:** `f883c5d`
+**Files Changed:** 3 files, 93 insertions(+), 19 deletions(-)
+
+#### Header Library Extensions (`src/compute/graph/cuda/base.cc`, `include/jetstream/compute/graph/cuda.hh`)
+**Problem:**
+- Header enum only exposed complex math; no reusable tensor- or window-specific helpers
+
+**Solution:**
+- Added `KernelHeader::TENSOR` with generic stride/offset helpers and `KernelHeader::WINDOW` with Hann/Hamming/Blackman utilities
+- Updated enum definitions and NVRTC loader to dedupe and serve the new embedded headers
+
+#### Arithmetic Kernel Stride Handling (`src/modules/arithmetic/cuda/base.cc`)
+**Problem:**
+- TODO called out missing stride handler; kernel reimplemented indexing locally in every kernel
+
+**Solution:**
+- Swapped manual indexing for shared helpers via `#include "jetstream_tensor.cuh"`
+- Removed redundant loops and ensured CUDA kernel creation requests the tensor header
+
+**Impact:** ✅ CUDA kernels can now reuse tensor/window helpers, and arithmetic honors arbitrary strides
+
+---
+
 ## TODOs Resolved in This Session
 
 | Location | Original TODO | Status |
@@ -206,8 +230,9 @@ This document tracks all fixes and improvements applied during the current devel
 | `include/jetstream/instance.hh:214` | "Maybe add module->destroy()" | ✅ FIXED - Destroy incomplete module (`0ec4e67`) |
 | `src/render/components/text.cc:423` | "Find better way to normalize glyph offsets" | ✅ FIXED - Single-pass glyph placement (`0ec4e67`) |
 | `src/compute/graph/cuda/base.cc:146` | "Header loading" | ✅ FIXED - NVRTC now injects headers (`7886884`) |
+| `src/modules/arithmetic/cuda/base.cc:56` | "Implement global stride handler" | ✅ FIXED - Shared tensor helpers (`f883c5d`) |
 
-**Total TODOs Resolved:** 42 (5 critical fixes + 33 documentation + 3 cleanup + 1 CUDA infrastructure)
+**Total TODOs Resolved:** 43 (5 critical fixes + 33 documentation + 3 cleanup + 2 CUDA infrastructure)
 
 ---
 

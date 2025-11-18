@@ -2,7 +2,7 @@
 
 **Generated:** November 18, 2025
 **Status:** Active Development - Beta 1 Phase
-**Total TODOs (excluding third-party):** ~152 remaining (down from 161)
+**Total TODOs (excluding third-party):** ~151 remaining (down from 161)
 
 ---
 
@@ -19,8 +19,9 @@
 | `include/jetstream/instance.hh` | 208 | "Maybe add module->destroy()" | ✅ RESOLVED | 0ec4e67 |
 | `src/render/components/text.cc` | 423 | "Find better way to normalize glyph offsets" | ✅ RESOLVED | 0ec4e67 |
 | `src/compute/graph/cuda/base.cc` | 146 | "Header loading" | ✅ RESOLVED | 7886884 |
+| `src/modules/arithmetic/cuda/base.cc` | 56 | "Implement global stride handler" | ✅ RESOLVED | f883c5d |
 
-**Total Resolved This Session:** 9 TODOs
+**Total Resolved This Session:** 10 TODOs
 
 ---
 
@@ -79,7 +80,7 @@ Files affected (all `include/jetstream/blocks/*.hh`):
 | `src/modules/agc/cpu/base.cc` | 24 | Rewrite poor AGC implementation | 🔴 CRITICAL |
 | `src/modules/lineplot/metal/base.cc` | 5 | Improve performance | HIGH |
 | `src/modules/lineplot/metal/base.cc` | 20 | Use shared memory optimization | HIGH |
-| `src/modules/arithmetic/cuda/base.cc` | 56-58 | Improve naive implementation, add stride handler | MEDIUM |
+| `src/modules/arithmetic/cuda/base.cc` | 56-58 | Improve naive implementation (add remaining ops) | MEDIUM |
 | `src/modules/duplicate/cuda/base.cc` | 52-53 | Improve naive implementation, add stride handler | MEDIUM |
 | `src/modules/lineplot/cuda/base.cc` | 95 | Join kernels | MEDIUM |
 | `src/render/tools/imnodes.cpp` | 515 | Fix O(N²) algorithm | LOW |
