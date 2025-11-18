@@ -46,6 +46,7 @@ Result Arithmetic<D, T>::createCompute(const Context& ctx) {
     // Create CUDA kernel.
 
     std::string kernel = R"""(
+        #include "jetstream_tensor.cuh"
         struct Meta {
             void* ptr;
             size_t rank;
@@ -54,7 +55,6 @@ Result Arithmetic<D, T>::createCompute(const Context& ctx) {
         };
 
         // TODO: Improve this naive implementation.
-        // TODO: Implement global stride handler.
         // TODO: Implement all arithmetic operations.
 
         __global__ void arithmetic(Meta input, Meta output, size_t size) {
@@ -66,24 +66,12 @@ Result Arithmetic<D, T>::createCompute(const Context& ctx) {
                 return;
             }
 
-            // Calculate shape from ID.
+            // Calculate input and output offsets using shared tensor helpers.
 
-            size_t shape[8];
-            size_t temp_id = id;
-            for (int i = (int)input.rank - 1; i >= 0; i--) {
-                shape[i] = temp_id % input.shape[i];
-                temp_id /= input.shape[i];
-            }
-
-            // Calculate input and output offset from shape.
-
-            size_t input_offset = 0;
-            size_t output_offset = 0;
-
-            for (size_t i = 0; i < input.rank; i++) {
-                input_offset += shape[i] * input.strides[i];
-                output_offset += shape[i] * output.strides[i];
-            }
+            size_t coords[JST_MAX_TENSOR_RANK];
+            jst_tensor_index(id, input.rank, input.shape, coords);
+            size_t input_offset = jst_tensor_offset(coords, input.strides, input.rank);
+            size_t output_offset = jst_tensor_offset(coords, output.strides, output.rank);
 
             // Reinterpret input and output pointers.
 
@@ -120,7 +108,7 @@ Result Arithmetic<D, T>::createCompute(const Context& ctx) {
         kernel = std::regex_replace(kernel, std::regex(R"(\[\/\/OP\/\/\])"), operation);
     }
 
-    ctx.cuda->createKernel("arithmetic", kernel);
+    ctx.cuda->createKernel("arithmetic", kernel, {CUDA::KernelHeader::TENSOR});
 
     // Initialize kernel size.
 

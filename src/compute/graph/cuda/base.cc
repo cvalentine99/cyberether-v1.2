@@ -56,10 +56,94 @@ constexpr KernelHeaderDefinition kComplexHeaderDefinition{
     kComplexHeaderSource,
 };
 
+constexpr char kTensorHeaderName[] = "jetstream_tensor.cuh";
+constexpr char kTensorHeaderSource[] = R"(
+#ifndef JETSTREAM_TENSOR_HEADER
+#define JETSTREAM_TENSOR_HEADER
+
+#ifndef JST_MAX_TENSOR_RANK
+#define JST_MAX_TENSOR_RANK 8
+#endif
+
+__device__ inline void jst_tensor_index(size_t id,
+                                        size_t rank,
+                                        const size_t* shape,
+                                        size_t* coords) {
+    for (size_t i = 0; i < rank; ++i) {
+        coords[i] = 0;
+    }
+    for (int idx = static_cast<int>(rank) - 1; idx >= 0; --idx) {
+        coords[idx] = id % shape[idx];
+        id /= shape[idx];
+    }
+}
+
+__device__ inline size_t jst_tensor_offset(const size_t* coords,
+                                           const size_t* strides,
+                                           size_t rank) {
+    size_t offset = 0;
+    for (size_t i = 0; i < rank; ++i) {
+        offset += coords[i] * strides[i];
+    }
+    return offset;
+}
+
+#endif  // JETSTREAM_TENSOR_HEADER
+)";
+
+constexpr KernelHeaderDefinition kTensorHeaderDefinition{
+    CUDA::KernelHeader::TENSOR,
+    kTensorHeaderName,
+    kTensorHeaderSource,
+};
+
+constexpr char kWindowHeaderName[] = "jetstream_window.cuh";
+constexpr char kWindowHeaderSource[] = R"(
+#ifndef JETSTREAM_WINDOW_HEADER
+#define JETSTREAM_WINDOW_HEADER
+
+__device__ inline float jst_window_hann(size_t i, size_t size) {
+    if (size <= 1) {
+        return 1.0f;
+    }
+    return 0.5f * (1.0f - cosf((2.0f * CUDART_PI_F * i) / static_cast<float>(size - 1)));
+}
+
+__device__ inline float jst_window_hamming(size_t i, size_t size) {
+    if (size <= 1) {
+        return 1.0f;
+    }
+    return 0.54f - 0.46f * cosf((2.0f * CUDART_PI_F * i) / static_cast<float>(size - 1));
+}
+
+__device__ inline float jst_window_blackman(size_t i, size_t size) {
+    if (size <= 1) {
+        return 1.0f;
+    }
+    const float a0 = 0.42f;
+    const float a1 = 0.5f;
+    const float a2 = 0.08f;
+    const float phase = (2.0f * CUDART_PI_F * i) / static_cast<float>(size - 1);
+    return a0 - a1 * cosf(phase) + a2 * cosf(2.0f * phase);
+}
+
+#endif  // JETSTREAM_WINDOW_HEADER
+)";
+
+constexpr KernelHeaderDefinition kWindowHeaderDefinition{
+    CUDA::KernelHeader::WINDOW,
+    kWindowHeaderName,
+    kWindowHeaderSource,
+};
+
 const KernelHeaderDefinition* FindHeaderDefinition(CUDA::KernelHeader header) {
     switch (header) {
         case CUDA::KernelHeader::COMPLEX:
             return &kComplexHeaderDefinition;
+        case CUDA::KernelHeader::TENSOR:
+            return &kTensorHeaderDefinition;
+        case CUDA::KernelHeader::WINDOW:
+            return &kWindowHeaderDefinition;
         default:
             return nullptr;
     }

@@ -26,6 +26,8 @@ class CUDA : public Graph {
     enum class KernelHeader {
         NONE,
         COMPLEX,
+        TENSOR,
+        WINDOW,
     };
 
     Result createKernel(const std::string& name, 
