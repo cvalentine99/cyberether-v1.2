@@ -40,6 +40,7 @@ struct Spectrogram<D, T>::GImpl {
     U64 numberOfElements = 0;
     U64 numberOfBatches = 0;
     U64 totalFrequencyBins = 0;
+    bool updateSignalUniformBufferFlag = false;
 };
 
 template<Device D, typename T>
@@ -77,37 +78,37 @@ void Spectrogram<D, T>::info() const {
 
 template<Device D, typename T>
 Result Spectrogram<D, T>::createPresent() {
-    // Signal element.
-
-    {
+    auto buildStaticBuffer = [&](std::shared_ptr<Render::Buffer>& handle,
+                                 const void* data,
+                                 U64 count,
+                                 U64 elementSize,
+                                 Render::Buffer::Target target) -> Result {
         Render::Buffer::Config cfg;
-        cfg.buffer = &FillScreenVertices;
-        cfg.elementByteSize = sizeof(float);
-        cfg.size = 12;
-        cfg.target = Render::Buffer::Target::VERTEX;
-        JST_CHECK(window->build(gimpl->fillScreenVerticesBuffer, cfg));
-        JST_CHECK(window->bind(gimpl->fillScreenVerticesBuffer));
-    }
+        cfg.buffer = data;
+        cfg.elementByteSize = elementSize;
+        cfg.size = count;
+        cfg.target = target;
+        JST_CHECK(window->build(handle, cfg));
+        return window->bind(handle);
+    };
 
-    {
-        Render::Buffer::Config cfg;
-        cfg.buffer = &FillScreenTextureVertices;
-        cfg.elementByteSize = sizeof(float);
-        cfg.size = 8;
-        cfg.target = Render::Buffer::Target::VERTEX;
-        JST_CHECK(window->build(gimpl->fillScreenTextureVerticesBuffer, cfg));
-        JST_CHECK(window->bind(gimpl->fillScreenTextureVerticesBuffer));
-    }
+    JST_CHECK(buildStaticBuffer(gimpl->fillScreenVerticesBuffer,
+                                &FillScreenVertices,
+                                12,
+                                sizeof(float),
+                                Render::Buffer::Target::VERTEX));
 
-    {
-        Render::Buffer::Config cfg;
-        cfg.buffer = &FillScreenIndices;
-        cfg.elementByteSize = sizeof(uint32_t);
-        cfg.size = 6;
-        cfg.target = Render::Buffer::Target::VERTEX_INDICES;
-        JST_CHECK(window->build(gimpl->fillScreenIndicesBuffer, cfg));
-        JST_CHECK(window->bind(gimpl->fillScreenIndicesBuffer));
-    }
+    JST_CHECK(buildStaticBuffer(gimpl->fillScreenTextureVerticesBuffer,
+                                &FillScreenTextureVertices,
+                                8,
+                                sizeof(float),
+                                Render::Buffer::Target::VERTEX));
+
+    JST_CHECK(buildStaticBuffer(gimpl->fillScreenIndicesBuffer,
+                                &FillScreenIndices,
+                                6,
+                                sizeof(uint32_t),
+                                Render::Buffer::Target::VERTEX_INDICES));
 
     {
         Render::Vertex::Config cfg;
@@ -157,6 +158,12 @@ Result Spectrogram<D, T>::createPresent() {
         JST_CHECK(window->build(gimpl->signalUniformBuffer, cfg));
         JST_CHECK(window->bind(gimpl->signalUniformBuffer));
     }
+
+    gimpl->signalUniforms.width = gimpl->numberOfElements;
+    gimpl->signalUniforms.height = config.height;
+    gimpl->signalUniforms.zoom = 1.0f;
+    gimpl->signalUniforms.offset = 0.0f;
+    gimpl->updateSignalUniformBufferFlag = true;
 
     {
         Render::Program::Config cfg;
@@ -210,12 +217,10 @@ template<Device D, typename T>
 Result Spectrogram<D, T>::present() {
     gimpl->signalBuffer->update();
 
-    gimpl->signalUniforms.width = gimpl->numberOfElements;
-    gimpl->signalUniforms.height = config.height;
-    gimpl->signalUniforms.zoom = 1.0;
-    gimpl->signalUniforms.offset = 0.0;
-
-    gimpl->signalUniformBuffer->update();
+    if (gimpl->updateSignalUniformBufferFlag) {
+        gimpl->signalUniformBuffer->update();
+        gimpl->updateSignalUniformBufferFlag = false;
+    }
 
     return Result::SUCCESS;
 }
@@ -230,6 +235,8 @@ const Extent2D<U64>& Spectrogram<D, T>::viewSize(const Extent2D<U64>& viewSize) 
                 viewSize.y);
 
         config.viewSize = gimpl->surface->size();
+        gimpl->signalUniforms.height = config.height;
+        gimpl->updateSignalUniformBufferFlag = true;
     }
     return this->viewSize();
 }

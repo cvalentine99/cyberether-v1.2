@@ -1,6 +1,8 @@
 #ifndef JETSTREAM_MEMORY_CPU_HELPERS_HH
 #define JETSTREAM_MEMORY_CPU_HELPERS_HH
 
+#include <tuple>
+
 #include "jetstream/types.hh"
 #include "jetstream/memory/types.hh"
 
@@ -22,10 +24,11 @@ inline void AutomaticIterator(const Function& function, Args&... args) {
         const std::array<const U64*, sizeof...(Args)> backstride = {args.backstride().data()...};
         const std::array<const U64*, sizeof...(Args)> shape_m1 = {args.shape_minus_one().data()...};
         const std::array<const U64*, sizeof...(Args)> stride = {args.stride().data()...};
+        const auto dataPointers = std::make_tuple(args.data()...);
 
         for (U64 i = 0; i < size; i++) {
             [&]<size_t... Is>(std::index_sequence<Is...>) __attribute__((always_inline)) {
-                function(std::get<Is>(std::forward_as_tuple(args.data()...))[ptr[Is]]...);
+                function(std::get<Is>(dataPointers)[ptr[Is]]...);
             }(std::index_sequence_for<Args...>{});
 
             if constexpr (sizeof...(Iterator) == 1 && sizeof...(Args) > 1) {
@@ -96,17 +99,23 @@ inline void AutomaticIterator(const Function& function, Args&... args) {
         }
     };
 
+    // Fast contiguous path
+    if ((args.contiguous() && ...)) {
+        auto pointerTuple = std::make_tuple(args.data() + args.offset()...);
+
+        [&]<size_t... Is>(std::index_sequence<Is...>) {
+            for (U64 idx = 0; idx < size; ++idx) {
+                function((std::get<Is>(pointerTuple))[0]...);
+                ((++std::get<Is>(pointerTuple)), ...);
+            }
+        }(std::index_sequence_for<Args...>{});
+        return;
+    }
+
     // 1D
 
     if (rank == 1) {
         loop(iterator_1d);
-        return;
-    }
-
-    // Contiguous
-
-    if ((args.contiguous() && ...)) {
-        loop(iterator_contiguous);
         return;
     }
 

@@ -29,9 +29,33 @@
 
 #include <httplib.h>
 #include <nlohmann/json.hpp>
+#include <mutex>
+#include <unordered_set>
 #include <vector>
 
 namespace Jetstream::Viewport {
+
+namespace RemoteHelpers {
+
+std::vector<std::string> PendingSessions(const std::vector<std::string>& waitlist,
+                                         const std::vector<std::string>& activeSessions) {
+    std::vector<std::string> pending;
+    pending.reserve(waitlist.size());
+
+    std::unordered_set<std::string> seen(activeSessions.begin(), activeSessions.end());
+
+    for (const auto& candidate : waitlist) {
+        auto [_, inserted] = seen.insert(candidate);
+        if (inserted) {
+            pending.push_back(candidate);
+        }
+    }
+
+    pending.shrink_to_fit();
+    return pending;
+}
+
+}  // namespace RemoteHelpers
 
 struct Remote::Impl {
     enum class Strategy {
@@ -58,6 +82,8 @@ struct Remote::Impl {
     std::string webrtcUrl;
     std::vector<std::string> waitlist;
     std::vector<std::string> sessions;
+    std::mutex waitlistMutex;
+    std::mutex sessionsMutex;
 
     bool brokerRunning;
     std::thread brokerThread;
@@ -334,7 +360,13 @@ Result Remote::Impl::createBroker() {
                 return out;
             };
 
-            for (auto& sessionId : waitlist) {
+            std::vector<std::string> waitlistSnapshot;
+            {
+                std::lock_guard<std::mutex> lock(waitlistMutex);
+                waitlistSnapshot = waitlist;
+            }
+
+            for (const auto& sessionId : waitlistSnapshot) {
                 JST_DEBUG("[REMOTE] Candidate session: {}", sessionId);
 
                 if (sessionId.ends_with(to_lower(code))) {
@@ -418,11 +450,17 @@ Result Remote::Impl::createBroker() {
         });
 
         auto clients_panel = ftxui::Renderer([&] {
+            std::vector<std::string> sessionsSnapshot;
+            {
+                std::lock_guard<std::mutex> lock(sessionsMutex);
+                sessionsSnapshot = sessions;
+            }
+
             std::vector<ftxui::Element> lines;
-            if (sessions.empty()) {
+            if (sessionsSnapshot.empty()) {
                 lines.push_back(ftxui::text("No clients yet.") | ftxui::dim | ftxui::bold);
             } else {
-                for (const auto& s : sessions) {
+                for (const auto& s : sessionsSnapshot) {
                     lines.push_back(ftxui::text("• " + s));
                 }
             }
@@ -488,6 +526,54 @@ Result Remote::Impl::createBroker() {
 
         auto screen = ftxui::ScreenInteractive::Fullscreen();
 
+        std::thread auto_join_thread;
+        if (config.autoJoin) {
+            JST_WARN("[REMOTE] Auto-join is enabled. All pending sessions will be approved automatically.");
+            auto_join_thread = std::thread([&] {
+                using namespace std::chrono_literals;
+                while (brokerRunning) {
+                    if (updateWaitlist() != Result::SUCCESS) {
+                        std::this_thread::sleep_for(1s);
+                        continue;
+                    }
+
+                    std::vector<std::string> waitlistSnapshot;
+                    {
+                        std::lock_guard<std::mutex> lock(waitlistMutex);
+                        waitlistSnapshot = waitlist;
+                    }
+
+                    std::vector<std::string> sessionsSnapshot;
+                    {
+                        std::lock_guard<std::mutex> lock(sessionsMutex);
+                        sessionsSnapshot = sessions;
+                    }
+
+                    const auto pending = RemoteHelpers::PendingSessions(waitlistSnapshot, sessionsSnapshot);
+                    if (pending.empty()) {
+                        std::this_thread::sleep_for(1s);
+                        continue;
+                    }
+
+                    for (const auto& sessionId : pending) {
+                        if (!brokerRunning) {
+                            break;
+                        }
+
+                        JST_INFO("[REMOTE] Auto-approving session '{}'.", sessionId);
+                        if (approveSession(sessionId) != Result::SUCCESS) {
+                            JST_WARN("[REMOTE] Failed to auto-approve session '{}'.", sessionId);
+                            continue;
+                        }
+
+                        if (updateSessions() == Result::SUCCESS) {
+                            screen.Post(ftxui::Event::Custom);
+                        }
+                    }
+                }
+            });
+        }
+
         auth_panel->SetActiveChild(input_field);
         input_field->TakeFocus();
 
@@ -510,6 +596,9 @@ Result Remote::Impl::createBroker() {
         brokerRunning = false;
         if (update_thread.joinable()) {
             update_thread.join();
+        }
+        if (auto_join_thread.joinable()) {
+            auto_join_thread.join();
         }
 
         JST_LOG_RESTORE_STDOUT();
@@ -1276,7 +1365,11 @@ Result Remote::Impl::updateWaitlist() {
             return Result::ERROR;
         }
 
-        waitlist = j["sessions"].get<std::vector<std::string>>();
+        auto newWaitlist = j["sessions"].get<std::vector<std::string>>();
+        {
+            std::lock_guard<std::mutex> lock(waitlistMutex);
+            waitlist = std::move(newWaitlist);
+        }
     } catch (const std::exception& e) {
         JST_ERROR("[REMOTE] JSON parse error '{}': {}", e.what(), res->body);
         return Result::ERROR;
@@ -1301,7 +1394,11 @@ Result Remote::Impl::updateSessions() {
             return Result::ERROR;
         }
 
-        sessions = j["sessions"].get<std::vector<std::string>>();
+        auto newSessions = j["sessions"].get<std::vector<std::string>>();
+        {
+            std::lock_guard<std::mutex> lock(sessionsMutex);
+            sessions = std::move(newSessions);
+        }
     } catch (const std::exception& e) {
         JST_ERROR("[REMOTE] JSON parse error '{}': {}", e.what(), res->body);
         return Result::ERROR;

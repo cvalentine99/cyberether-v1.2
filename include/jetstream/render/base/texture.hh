@@ -32,11 +32,12 @@ class Texture : public WindowAttachment {
 
     struct Config {
         Extent2D<U64> size;
-        const uint8_t* buffer = nullptr;
+        const void* buffer = nullptr;
         DataFormat dfmt = DataFormat::RGBA;
         PixelFormat pfmt = PixelFormat::RGBA;
         PixelType ptype = PixelType::UI8;
         bool multisampled = false;
+        bool enableZeroCopy = false;
     };
 
     explicit Texture(const Config& config) : config(config) {}

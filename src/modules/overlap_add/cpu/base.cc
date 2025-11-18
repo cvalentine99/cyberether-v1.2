@@ -26,38 +26,55 @@ Result OverlapAdd<D, T>::createCompute(const Context&) {
 
 template<Device D, typename T>
 Result OverlapAdd<D, T>::compute(const Context&) {
-    // Copy input buffer to output buffer.
+    const auto axis = config.axis;
+    const auto rank = input.buffer.rank();
+
+    std::vector<U64> coord(rank, 0);
+    std::vector<U64> overlapCoord(rank, 0);
+    std::vector<U64> prevCoord(rank, 0);
 
     for (U64 i = 0; i < input.buffer.size(); i++) {
         output.buffer[i] = input.buffer[i];
     }
 
-    // Add overlap to output buffer.
+    const auto& overlapShape = input.overlap.shape();
+    const auto& prevShape = impl->previousOverlap.shape();
 
-    {
-        std::vector<U64> shape = input.overlap.shape();
-        for (U64 i = 0; i < input.overlap.size(); i++) {
-            input.overlap.offset_to_shape(i, shape);
-            auto& sample = output.buffer[shape];
-
-            if (shape[0] == 0) {
-                sample += impl->previousOverlap[shape];
-            } else {
-                shape[0] -= 1;
-                sample += input.overlap[shape];
+    auto clampBroadcast = [](std::vector<U64>& target, const std::vector<U64>& sourceShape) {
+        for (U64 dim = 0; dim < sourceShape.size(); ++dim) {
+            if (sourceShape[dim] == 1) {
+                target[dim] = 0;
             }
+        }
+    };
+
+    for (U64 i = 0; i < output.buffer.size(); ++i) {
+        output.buffer.offset_to_shape(i, coord);
+        auto& sample = output.buffer[coord];
+
+        if (coord[axis] == 0) {
+            prevCoord = coord;
+            prevCoord[axis] = 0;
+            clampBroadcast(prevCoord, prevShape);
+            sample += impl->previousOverlap[prevCoord];
+        } else {
+            overlapCoord = coord;
+            overlapCoord[axis] -= 1;
+            clampBroadcast(overlapCoord, overlapShape);
+            sample += input.overlap[overlapCoord];
         }
     }
 
-    // Get last batch element from overlap.
+    const U64 lastSlice = (overlapShape[axis] > 0) ? overlapShape[axis] - 1 : 0;
+    std::vector<U64> writeCoord(rank, 0);
+    std::vector<U64> sourceCoord(rank, 0);
 
-    {
-        std::vector<U64> shape = impl->previousOverlap.shape();
-        for (U64 i = 0; i < impl->previousOverlap.size(); i++) {
-            impl->previousOverlap.offset_to_shape(i, shape);
-            shape[0] = input.overlap.shape()[0] - 1;
-            impl->previousOverlap[i] = input.overlap[shape];
-        }
+    for (U64 i = 0; i < impl->previousOverlap.size(); ++i) {
+        impl->previousOverlap.offset_to_shape(i, writeCoord);
+        sourceCoord = writeCoord;
+        sourceCoord[axis] = lastSlice;
+        clampBroadcast(sourceCoord, overlapShape);
+        impl->previousOverlap[i] = input.overlap[sourceCoord];
     }
 
     return Result::SUCCESS;

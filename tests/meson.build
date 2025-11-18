@@ -1,5 +1,7 @@
 if catch2_dep.found()
     subdir('memory')
+    subdir('modules')
+    subdir('remote')
 endif
 
 test('memory', executable(

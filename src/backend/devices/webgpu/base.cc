@@ -2,6 +2,10 @@
 
 #include "jetstream/backend/devices/webgpu/base.hh"
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/html5.h>
+#endif
+
 namespace Jetstream::Backend {
 
 WebGPU::WebGPU(const Config& _config) : config(_config), cache({}) {
@@ -50,15 +54,33 @@ U64 WebGPU::getTotalProcessorCount() const {
 }
 
 bool WebGPU::getLowPowerStatus() const {
-    // Power status monitoring not available in WebGPU/browser environment.
-    // Browser Battery Status API exists but requires async JS calls.
-    // Return false (not in low power mode) as a sensible default.
+#if defined(__EMSCRIPTEN__)
+    EmscriptenBatteryEvent batteryStatus{};
+    if (emscripten_get_battery_status(&batteryStatus) == EMSCRIPTEN_RESULT_SUCCESS) {
+        const bool batteryLow = batteryStatus.level >= 0.0f && batteryStatus.level <= 0.2f;
+        const bool drainingFast = batteryStatus.dischargingTime >= 0.0 && batteryStatus.dischargingTime <= 600.0;
+        if (!batteryStatus.charging && (batteryLow || drainingFast)) {
+            return true;
+        }
+    }
+#endif
     return false;
 }
 
 U64 WebGPU::getThermalState() const {
-    // Thermal state monitoring not available in WebGPU/browser environment.
-    // Return 0 (nominal thermal state) as a sensible default.
+#if defined(__EMSCRIPTEN__)
+    EmscriptenBatteryEvent batteryStatus{};
+    if (emscripten_get_battery_status(&batteryStatus) == EMSCRIPTEN_RESULT_SUCCESS) {
+        if (batteryStatus.level >= 0.0f) {
+            if (batteryStatus.level <= 0.2f) {
+                return 2;
+            }
+            if (batteryStatus.level <= 0.4f) {
+                return 1;
+            }
+        }
+    }
+#endif
     return 0;
 }
 

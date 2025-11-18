@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <span>
+#include <type_traits>
 
 #include <glm/mat4x4.hpp>
 
@@ -202,57 +204,45 @@ Result Shapes::create(Window* window) {
         JST_CHECK(window->bind(pimpl->propertiesBuffer));
     }
 
-    {
-        auto [buffer, enableZeroCopy] = ConvertToOptimalStorage(window, pimpl->instanceColors);
+    auto bindTensorStorage = [&](auto& tensor,
+                                 std::shared_ptr<Render::Buffer>& handle,
+                                 Render::Buffer::Target target) -> Result {
+        using TensorType = std::remove_reference_t<decltype(tensor)>;
+
+        void* backing = nullptr;
+        bool zeroCopyEnabled = false;
+
+        if (config.enableZeroCopyBuffers) {
+            auto [ptr, zeroCopy] = ConvertToOptimalStorage(window, tensor);
+            backing = ptr;
+            zeroCopyEnabled = zeroCopy;
+        } else {
+            backing = MapOn<Device::CPU>(tensor).data();
+        }
 
         Render::Buffer::Config cfg;
-        cfg.buffer = buffer;
-        cfg.elementByteSize = sizeof(glm::vec4);
-        cfg.size = pimpl->instanceColors.size();
-        cfg.enableZeroCopy = enableZeroCopy;
-        cfg.target = Render::Buffer::Target::STORAGE;
-        JST_CHECK(window->build(pimpl->colorsBuffer, cfg));
-        JST_CHECK(window->bind(pimpl->colorsBuffer));
-    }
+        cfg.buffer = backing;
+        cfg.elementByteSize = sizeof(typename TensorType::DataType);
+        cfg.size = tensor.size();
+        cfg.enableZeroCopy = config.enableZeroCopyBuffers && zeroCopyEnabled;
+        cfg.target = target;
+        JST_CHECK(window->build(handle, cfg));
+        JST_CHECK(window->bind(handle));
+        return Result::SUCCESS;
+    };
 
-    {
-        auto [buffer, enableZeroCopy] = ConvertToOptimalStorage(window, pimpl->instanceRotations);
-
-        Render::Buffer::Config cfg;
-        cfg.buffer = buffer;
-        cfg.elementByteSize = sizeof(F32);
-        cfg.size = pimpl->instanceRotations.size();
-        cfg.enableZeroCopy = enableZeroCopy;
-        cfg.target = Render::Buffer::Target::STORAGE;
-        JST_CHECK(window->build(pimpl->rotationsBuffer, cfg));
-        JST_CHECK(window->bind(pimpl->rotationsBuffer));
-    }
-
-    {
-        auto [buffer, enableZeroCopy] = ConvertToOptimalStorage(window, pimpl->instanceSizes);
-
-        Render::Buffer::Config cfg;
-        cfg.buffer = buffer;
-        cfg.elementByteSize = sizeof(glm::vec2);
-        cfg.size = pimpl->instanceSizes.size();
-        cfg.enableZeroCopy = enableZeroCopy;
-        cfg.target = Render::Buffer::Target::STORAGE;
-        JST_CHECK(window->build(pimpl->sizesBuffer, cfg));
-        JST_CHECK(window->bind(pimpl->sizesBuffer));
-    }
-
-    {
-        auto [buffer, enableZeroCopy] = ConvertToOptimalStorage(window, pimpl->instancePositions);
-
-        Render::Buffer::Config cfg;
-        cfg.buffer = buffer;
-        cfg.elementByteSize = sizeof(glm::vec2);
-        cfg.size = pimpl->instancePositions.size();
-        cfg.enableZeroCopy = enableZeroCopy;
-        cfg.target = Render::Buffer::Target::STORAGE;
-        JST_CHECK(window->build(pimpl->positionsBuffer, cfg));
-        JST_CHECK(window->bind(pimpl->positionsBuffer));
-    }
+    JST_CHECK(bindTensorStorage(pimpl->instanceColors,
+                                pimpl->colorsBuffer,
+                                Render::Buffer::Target::STORAGE));
+    JST_CHECK(bindTensorStorage(pimpl->instanceRotations,
+                                pimpl->rotationsBuffer,
+                                Render::Buffer::Target::STORAGE));
+    JST_CHECK(bindTensorStorage(pimpl->instanceSizes,
+                                pimpl->sizesBuffer,
+                                Render::Buffer::Target::STORAGE));
+    JST_CHECK(bindTensorStorage(pimpl->instancePositions,
+                                pimpl->positionsBuffer,
+                                Render::Buffer::Target::STORAGE));
 
     {
         Render::Vertex::Config cfg;
@@ -321,24 +311,24 @@ Result Shapes::create(Window* window) {
             .instanceOffset = currentInstanceOffset,
         };
 
-        for (U64 i = 0; i < instanceCount; ++i) {
-            element.instanceColorsBuffer[i] = elementConfig.color;
-        }
+        std::fill(element.instanceColorsBuffer.begin(),
+                  element.instanceColorsBuffer.end(),
+                  elementConfig.color);
         pimpl->updateColorBufferFlag = true;
 
-        for (U64 i = 0; i < instanceCount; ++i) {
-            element.instanceRotationsBuffer[i] = elementConfig.rotation;
-        }
+        std::fill(element.instanceRotationsBuffer.begin(),
+                  element.instanceRotationsBuffer.end(),
+                  elementConfig.rotation);
         pimpl->updateRotationBufferFlag = true;
 
-        for (U64 i = 0; i < instanceCount; ++i) {
-            element.instancePositionsBuffer[i] = elementConfig.position;
-        }
+        std::fill(element.instancePositionsBuffer.begin(),
+                  element.instancePositionsBuffer.end(),
+                  elementConfig.position);
         pimpl->updatePositionBufferFlag = true;
 
-        for (U64 i = 0; i < instanceCount; ++i) {
-            element.instanceSizesBuffer[i] = elementConfig.size;
-        }
+        std::fill(element.instanceSizesBuffer.begin(),
+                  element.instanceSizesBuffer.end(),
+                  elementConfig.size);
         pimpl->updateSizeBufferFlag = true;
 
         pimpl->elementIndex[id] = pimpl->elements.size();
@@ -598,6 +588,34 @@ Result Shapes::updatePixelSize(const Extent2D<F32>& pixelSize) {
     }
 
     return Result::SUCCESS;
+}
+
+Result Shapes::setRotation(const std::string& elementId, F32 rotationDegrees) {
+    std::span<F32> rotations;
+    JST_CHECK(getRotations(elementId, rotations));
+    std::fill(rotations.begin(), rotations.end(), rotationDegrees);
+    return updateRotations(elementId);
+}
+
+Result Shapes::setPosition(const std::string& elementId, const Extent2D<F32>& position) {
+    std::span<Extent2D<F32>> positions;
+    JST_CHECK(getPositions(elementId, positions));
+    std::fill(positions.begin(), positions.end(), position);
+    return updatePositions(elementId);
+}
+
+Result Shapes::setSize(const std::string& elementId, const Extent2D<F32>& size) {
+    std::span<Extent2D<F32>> sizes;
+    JST_CHECK(getSizes(elementId, sizes));
+    std::fill(sizes.begin(), sizes.end(), size);
+    return updateSizes(elementId);
+}
+
+Result Shapes::setColor(const std::string& elementId, const ColorRGBA<F32>& color) {
+    std::span<ColorRGBA<F32>> colors;
+    JST_CHECK(getColors(elementId, colors));
+    std::fill(colors.begin(), colors.end(), color);
+    return updateColors(elementId);
 }
 
 Result Shapes::present() {

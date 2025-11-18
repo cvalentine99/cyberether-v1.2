@@ -2,6 +2,24 @@
 
 namespace Jetstream {
 
+namespace {
+class ScopedAutoreleasePool {
+ public:
+    ScopedAutoreleasePool() : pool(NS::AutoreleasePool::alloc()->init()) {}
+    ~ScopedAutoreleasePool() {
+        if (pool) {
+            pool->release();
+        }
+    }
+
+    ScopedAutoreleasePool(const ScopedAutoreleasePool&) = delete;
+    ScopedAutoreleasePool& operator=(const ScopedAutoreleasePool&) = delete;
+
+ private:
+    NS::AutoreleasePool* pool = nullptr;
+};
+}
+
 Metal::Metal() {
     JST_DEBUG("Creating new Metal compute graph.");
     context = std::make_shared<Compute::Context>();
@@ -13,8 +31,6 @@ Metal::~Metal() {
 }
 
 Result Metal::create() {
-    // TODO: Check if a inner pool is necessary.
-
     const auto& device = Backend::State<Device::Metal>()->getDevice();
     _commandQueue = device->newCommandQueue();
 
@@ -33,8 +49,7 @@ Result Metal::computeReady() {
 }
 
 Result Metal::compute(std::unordered_set<U64>& yielded) {
-    innerPool = NS::AutoreleasePool::alloc()->init();
-
+    ScopedAutoreleasePool pool;
     _commandBuffer = _commandQueue->commandBuffer();
 
     for (const auto& computeUnit : computeUnits) {
@@ -60,8 +75,6 @@ Result Metal::compute(std::unordered_set<U64>& yielded) {
     _commandBuffer->commit();
     _commandBuffer->waitUntilCompleted();
 
-    innerPool->release();
-
     return Result::SUCCESS;
 }
 
@@ -71,8 +84,6 @@ Result Metal::destroy() {
     }
     computeUnits.clear();
     
-    // TODO: Check if a inner pool is necessary.
-
     return Result::SUCCESS;
 }
 

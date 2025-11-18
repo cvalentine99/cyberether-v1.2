@@ -123,7 +123,7 @@ Result Superluminal::initialize(const InstanceConfig& config) {
     };
 
     Instance::Config instanceConfig = {
-        .preferredDevice = Device::None,
+        .preferredDevice = impl->config.preferredDevice,
         .renderCompositor = false,
         .backendConfig = backendConfig,
         .viewportConfig = viewportConfig,

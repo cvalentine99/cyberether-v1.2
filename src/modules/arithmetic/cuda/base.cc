@@ -27,6 +27,8 @@ struct Arithmetic<D, T>::Impl {
     Tensor<Device::CUDA, T> input;
 
     Tensor<D, T> broadcasted_output;
+
+    int operation;
 };
 
 template<Device D, typename T>
@@ -54,10 +56,122 @@ Result Arithmetic<D, T>::createCompute(const Context& ctx) {
             size_t strides[8];
         };
 
-        // TODO: Improve this naive implementation.
-        // TODO: Implement all arithmetic operations.
+        enum ArithmeticOperation {
+            kAdd = 0,
+            kSub = 1,
+            kMul = 2,
+            kDiv = 3,
+        };
 
-        __global__ void arithmetic(Meta input, Meta output, size_t size) {
+        __device__ inline void atomic_mul(float* address, float value) {
+            float old = *address;
+            float assumed;
+            do {
+                assumed = old;
+                const float updated = assumed * value;
+                old = __uint_as_float(atomicCAS(reinterpret_cast<unsigned int*>(address),
+                                                __float_as_uint(assumed),
+                                                __float_as_uint(updated)));
+            } while (__float_as_uint(assumed) != __float_as_uint(old));
+        }
+
+        __device__ inline void atomic_div(float* address, float value) {
+            float old = *address;
+            float assumed;
+            do {
+                assumed = old;
+                const float updated = assumed / value;
+                old = __uint_as_float(atomicCAS(reinterpret_cast<unsigned int*>(address),
+                                                __float_as_uint(assumed),
+                                                __float_as_uint(updated)));
+            } while (__float_as_uint(assumed) != __float_as_uint(old));
+        }
+
+        __device__ inline float2 complex_mul(const float2& lhs, const float2& rhs) {
+            return float2{(lhs.x * rhs.x) - (lhs.y * rhs.y),
+                          (lhs.x * rhs.y) + (lhs.y * rhs.x)};
+        }
+
+        __device__ inline float2 complex_div(const float2& lhs, const float2& rhs) {
+            const float denom = (rhs.x * rhs.x) + (rhs.y * rhs.y) + 1e-20f;
+            return float2{((lhs.x * rhs.x) + (lhs.y * rhs.y)) / denom,
+                          ((lhs.y * rhs.x) - (lhs.x * rhs.y)) / denom};
+        }
+
+        union Float2Uint64 {
+            unsigned long long int bits;
+            float2 value;
+        };
+
+        __device__ inline void atomic_mul(float2* address, const float2& value) {
+            auto* raw = reinterpret_cast<unsigned long long int*>(address);
+            unsigned long long int old = *raw;
+            while (true) {
+                Float2Uint64 expected;
+                expected.bits = old;
+                const float2 updated = complex_mul(expected.value, value);
+                Float2Uint64 desired;
+                desired.value = updated;
+                old = atomicCAS(raw, expected.bits, desired.bits);
+                if (expected.bits == old) {
+                    break;
+                }
+            }
+        }
+
+        __device__ inline void atomic_div(float2* address, const float2& value) {
+            auto* raw = reinterpret_cast<unsigned long long int*>(address);
+            unsigned long long int old = *raw;
+            while (true) {
+                Float2Uint64 expected;
+                expected.bits = old;
+                const float2 updated = complex_div(expected.value, value);
+                Float2Uint64 desired;
+                desired.value = updated;
+                old = atomicCAS(raw, expected.bits, desired.bits);
+                if (expected.bits == old) {
+                    break;
+                }
+            }
+        }
+
+        __device__ inline void apply_operation(float* target, float value, int operation) {
+            switch (operation) {
+                case kAdd:
+                    atomicAdd(target, value);
+                    break;
+                case kSub:
+                    atomicAdd(target, -value);
+                    break;
+                case kMul:
+                    atomic_mul(target, value);
+                    break;
+                case kDiv:
+                    atomic_div(target, value);
+                    break;
+            }
+        }
+
+        __device__ inline void apply_operation(float2* target, const float2& value, int operation) {
+            switch (operation) {
+                case kAdd:
+                    atomicAdd(&target->x, value.x);
+                    atomicAdd(&target->y, value.y);
+                    break;
+                case kSub:
+                    atomicAdd(&target->x, -value.x);
+                    atomicAdd(&target->y, -value.y);
+                    break;
+                case kMul:
+                    atomic_mul(target, value);
+                    break;
+                case kDiv:
+                    atomic_div(target, value);
+                    break;
+            }
+        }
+
+        __global__ void arithmetic(Meta input, Meta output, size_t size, int operation) {
             size_t id = blockIdx.x * blockDim.x + threadIdx.x;
 
             // Return if ID is out of bounds.
@@ -91,7 +205,7 @@ Result Arithmetic<D, T>::createCompute(const Context& ctx) {
         kernel = std::regex_replace(kernel, std::regex(R"(\[\/\/CAST\/\/\])"), cast);
 
         const std::string operation = R"""(
-            atomicAdd(&output_ptr[output_offset], input_ptr[input_offset]);
+            apply_operation(&output_ptr[output_offset], input_ptr[input_offset], operation);
         )""";
         kernel = std::regex_replace(kernel, std::regex(R"(\[\/\/OP\/\/\])"), operation);
     } else if constexpr (std::is_same_v<T, CF32>) {
@@ -102,8 +216,7 @@ Result Arithmetic<D, T>::createCompute(const Context& ctx) {
         kernel = std::regex_replace(kernel, std::regex(R"(\[\/\/CAST\/\/\])"), cast);
 
         const std::string operation = R"""(
-            atomicAdd(&output_ptr[output_offset].x, input_ptr[input_offset].x);
-            atomicAdd(&output_ptr[output_offset].y, input_ptr[input_offset].y);
+            apply_operation(&output_ptr[output_offset], input_ptr[input_offset], operation);
         )""";
         kernel = std::regex_replace(kernel, std::regex(R"(\[\/\/OP\/\/\])"), operation);
     }
@@ -154,10 +267,13 @@ Result Arithmetic<D, T>::createCompute(const Context& ctx) {
 
     pimpl->size = input.buffer.size();
 
+    pimpl->operation = static_cast<int>(config.operation);
+
     pimpl->arguments = {
         &pimpl->inputMeta,
         &pimpl->outputMeta,
         &pimpl->size,
+        &pimpl->operation,
     };
 
     return Result::SUCCESS;
@@ -168,6 +284,8 @@ Result Arithmetic<D, T>::compute(const Context& ctx) {
     if (!input.buffer.device_native() && input.buffer.contiguous()) {
         JST_CHECK(Memory::Copy(pimpl->input, input.buffer, ctx.cuda->stream()));
     }
+
+    pimpl->operation = static_cast<int>(config.operation);
 
     JST_CUDA_CHECK(cudaMemsetAsync(output.buffer.data(), 0, output.buffer.size_bytes(), ctx.cuda->stream()), [&]{
         JST_ERROR("Failed to clear output buffer: {}", err);

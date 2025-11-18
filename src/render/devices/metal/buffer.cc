@@ -67,7 +67,8 @@ Result Implementation::update(const U64& offset, const U64& size) {
 
 
     uint8_t* ptr = static_cast<uint8_t*>(buffer->contents());
-    memcpy(ptr + byteOffset, (uint8_t*)config.buffer + byteOffset, byteSize);
+    auto host = static_cast<const uint8_t*>(config.buffer);
+    memcpy(ptr + byteOffset, host + byteOffset, byteSize);
 #if !defined(TARGET_OS_IOS)
     buffer->didModifyRange(NS::Range(byteOffset, byteSize));
 #endif

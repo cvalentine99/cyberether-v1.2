@@ -23,11 +23,13 @@ using Platform = Viewport::iOS<RenderDevice>;
 @interface ViewController : UIViewController {
     CADisplayLink* timer;
     CAMetalLayer* layer;
-    
+
     Instance instance;
 }
 
 - (void) draw;
 - (void) computeThread;
+- (void)handlePowerStateDidChange:(NSNotification *)notification;
+- (void)updatePreferredFrameRate;
 
 @end

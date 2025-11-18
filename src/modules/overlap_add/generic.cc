@@ -21,22 +21,41 @@ Result OverlapAdd<D, T>::create() {
         return Result::ERROR;
     }
 
-    if (input.buffer.shape()[config.axis] < input.overlap.shape()[config.axis]) {
-        JST_ERROR("Overlap buffer size ({}) is larger than the buffer size ({}).",
-                  input.overlap.shape()[config.axis], input.buffer.shape()[config.axis]);
+    const auto& bufferShape = input.buffer.shape();
+    const auto& overlapShape = input.overlap.shape();
+
+    if (bufferShape[config.axis] != overlapShape[config.axis]) {
+        JST_ERROR("Overlap axis dimension ({}) must match buffer axis dimension ({}).",
+                  overlapShape[config.axis],
+                  bufferShape[config.axis]);
         return Result::ERROR;
     }
 
-    // TODO: Add broadcasting support.
+    for (U64 dim = 0; dim < bufferShape.size(); ++dim) {
+        if (dim == config.axis) {
+            continue;
+        }
+
+        if (bufferShape[dim] == overlapShape[dim]) {
+            continue;
+        }
+
+        if (overlapShape[dim] != 1) {
+            JST_ERROR("Cannot broadcast overlap dimension {} (size {}) to buffer dimension {} (size {}).",
+                      dim,
+                      overlapShape[dim],
+                      dim,
+                      bufferShape[dim]);
+            return Result::ERROR;
+        }
+    }
 
     // Allocate output.
 
-    output.buffer = Tensor<D, T>(input.buffer.shape());
+    output.buffer = Tensor<D, T>(bufferShape);
 
-    auto previousOverlapShape = input.overlap.shape();
-    if (input.buffer.rank() > 1) {
-        previousOverlapShape[0] = 1;
-    }
+    auto previousOverlapShape = overlapShape;
+    previousOverlapShape[config.axis] = 1;
     impl->previousOverlap = Tensor<D, T>(previousOverlapShape);
 
     return Result::SUCCESS;

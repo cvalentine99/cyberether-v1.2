@@ -84,7 +84,7 @@ Result Implementation::encode(MTL::ComputeCommandEncoder* encoder) {
 
     const auto& [x, y, z] = config.gridSize;
 
-    // TODO: Implement 2D and 3D grid sizes.
+    // TODO(render-device): Implement 2D and 3D grid sizes.
     if (y != 1 || z != 1) {
         JST_ERROR("[METAL] Only 1D grids are supported.");
         return Result::ERROR;

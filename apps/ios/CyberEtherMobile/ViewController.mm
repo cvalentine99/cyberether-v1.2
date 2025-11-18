@@ -11,6 +11,9 @@
 
 @end
 
+static const NSInteger JSTDisplayLinkHighFPS = 120;
+static const NSInteger JSTDisplayLinkLowPowerFPS = 60;
+
 @implementation ViewController
 
 //
@@ -62,9 +65,8 @@
     [NSThread detachNewThreadSelector:@selector(computeThread) toTarget:self withObject:nil];
 
     // Add graphical thread.
-    // TODO: Update this value when on Low Power Mode to conserver power.
     timer = [CADisplayLink displayLinkWithTarget:self selector:@selector(draw)];
-    timer.preferredFramesPerSecond = 120;
+    [self updatePreferredFrameRate];
     [timer addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
 
     // Add long press gesture recognizer.
@@ -74,6 +76,17 @@
     // Add Apple Pencil hover gesture recognizer.
     UIHoverGestureRecognizer *hoverRecognizer = [[UIHoverGestureRecognizer alloc] initWithTarget:self action:@selector(handleHover:)];
     [self.view addGestureRecognizer:hoverRecognizer];
+
+    if (@available(iOS 9.0, *)) {
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(handlePowerStateDidChange:)
+                                                     name:NSProcessInfoPowerStateDidChangeNotification
+                                                   object:nil];
+    }
+}
+
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)computeThread {
@@ -173,6 +186,27 @@
     } else if (gestureRecognizer.state == UIGestureRecognizerStateEnded ||
                gestureRecognizer.state == UIGestureRecognizerStateCancelled) {
         instance.viewport().addMouseButtonEvent(1, false);
+    }
+}
+
+- (void)handlePowerStateDidChange:(NSNotification *)notification {
+    [self updatePreferredFrameRate];
+}
+
+- (void)updatePreferredFrameRate {
+    if (timer == nil) {
+        return;
+    }
+
+    NSInteger targetFPS = JSTDisplayLinkHighFPS;
+    if (@available(iOS 9.0, *)) {
+        if ([NSProcessInfo processInfo].lowPowerModeEnabled) {
+            targetFPS = JSTDisplayLinkLowPowerFPS;
+        }
+    }
+
+    if (timer.preferredFramesPerSecond != targetFPS) {
+        timer.preferredFramesPerSecond = targetFPS;
     }
 }
 

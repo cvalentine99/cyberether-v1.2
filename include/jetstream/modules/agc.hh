@@ -22,7 +22,13 @@ class AGC : public Module, public Compute {
     // Configuration
 
     struct Config {
-        JST_SERDES();
+        F32 targetLevel = 0.5f;
+        F32 maxGain = 20.0f;
+        F32 attackTime = 0.01f;
+        F32 releaseTime = 0.1f;
+        F32 sampleRate = 48000.0f;
+
+        JST_SERDES(targetLevel, maxGain, attackTime, releaseTime, sampleRate);
     };
 
     constexpr const Config& getConfig() const {

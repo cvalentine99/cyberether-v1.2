@@ -6,7 +6,10 @@
 
 #ifdef JETSTREAM_BACKEND_VULKAN_AVAILABLE
 #include "jetstream/memory/devices/vulkan/buffer.hh"
+#include "jetstream/memory/devices/vulkan/copy.hh"
 #endif
+
+#include <cstddef>
 
 #ifdef JETSTREAM_BACKEND_CUDA_AVAILABLE
 #include "jetstream/memory/devices/cuda/buffer.hh"
@@ -165,14 +168,61 @@ bool Implementation::CanImport(const TensorBuffer<Device::CPU>& root_buffer) noe
 
 #ifdef JETSTREAM_BACKEND_VULKAN_AVAILABLE
 Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>&,
-                             const TensorPrototypeMetadata&,
-                             const std::shared_ptr<TensorBuffer<Device::Vulkan>>&) {
-    throw std::runtime_error("Exporting Vulkan memory to Metal not implemented.");
-    // TODO: Add Vulkan -> Metal.
+                             const TensorPrototypeMetadata& prototype,
+                             const std::shared_ptr<TensorBuffer<Device::Vulkan>>& root_buffer) {
+    JST_TRACE("[METAL:BUFFER] Importing Vulkan buffer.");
+
+    if (!Backend::State<Device::Metal>()->isAvailable()) {
+        JST_TRACE("[METAL:BUFFER] Metal is not available.");
+        JST_CHECK_THROW(Result::ERROR);
+    }
+
+    if (!Backend::State<Device::Vulkan>()->isAvailable()) {
+        JST_TRACE("[METAL:BUFFER] Vulkan is not available.");
+        JST_CHECK_THROW(Result::ERROR);
+    }
+
+    if (!TensorBuffer<Device::Metal>::CanImport(*root_buffer)) {
+        JST_TRACE("[METAL:BUFFER] Vulkan buffer is not compatible with Metal.");
+        JST_CHECK_THROW(Result::ERROR);
+    }
+
+    if (prototype.size_bytes == 0 || !root_buffer->allocated()) {
+        return;
+    }
+
+    auto device = Backend::State<Device::Metal>()->getDevice();
+    const auto alignedSizeBytes = JST_PAGE_ALIGNED_SIZE(prototype.size_bytes);
+    buffer = device->newBuffer(alignedSizeBytes, MTL::ResourceStorageModeShared);
+    if (!buffer) {
+        JST_ERROR("[METAL:BUFFER] Failed to allocate memory.");
+        JST_CHECK_THROW(Result::ERROR);
+    }
+
+    set_allocated();
+    set_host_accessible();
+    set_device_native();
+    set_host_native();
+
+    auto* dstPtr = static_cast<std::byte*>(buffer->contents()) + prototype.offset_bytes;
+    JST_CHECK_THROW(Memory::detail::CopyVulkanBufferToHost(root_buffer->data(),
+                                                          root_buffer->memory(),
+                                                          root_buffer->host_accessible(),
+                                                          prototype.size_bytes,
+                                                          prototype.offset_bytes,
+                                                          dstPtr));
+
+    buffer->didModifyRange(NS::Range(prototype.offset_bytes, prototype.offset_bytes + prototype.size_bytes));
 }
 
 bool Implementation::CanImport(const TensorBuffer<Device::Vulkan>&) noexcept {
-    return false;
+    if (!Backend::State<Device::Metal>()->isAvailable()) {
+        return false;
+    }
+    if (!Backend::State<Device::Vulkan>()->isAvailable()) {
+        return false;
+    }
+    return true;
 }
 #endif
 

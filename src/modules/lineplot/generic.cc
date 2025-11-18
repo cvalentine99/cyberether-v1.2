@@ -1,5 +1,6 @@
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <type_traits>
 
 #include "jetstream/backend/devices/cpu/helpers.hh"
 #include "jetstream/modules/lineplot.hh"
@@ -296,31 +297,29 @@ Result Lineplot<D, T>::createPresent() {
         JST_CHECK(window->bind(gimpl->signalUniformBuffer));
     }
 
-    {
-        auto [buffer, enableZeroCopy] = ConvertToOptimalStorage(window, gimpl->signalPoints);
+    auto buildTensorBuffer = [&](auto& tensor,
+                                 std::shared_ptr<Render::Buffer>& handle,
+                                 Render::Buffer::Target target) -> Result {
+        using TensorType = std::remove_reference_t<decltype(tensor)>;
+        auto [buffer, enableZeroCopy] = ConvertToOptimalStorage(window, tensor);
 
         Render::Buffer::Config cfg;
         cfg.buffer = buffer;
-        cfg.elementByteSize = sizeof(F32);
-        cfg.size = gimpl->signalPoints.size();
-        cfg.target = Render::Buffer::Target::STORAGE;
+        cfg.elementByteSize = sizeof(typename TensorType::DataType);
+        cfg.size = tensor.size();
+        cfg.target = target;
         cfg.enableZeroCopy = enableZeroCopy;
-        JST_CHECK(window->build(gimpl->signalPointsBuffer, cfg));
-        JST_CHECK(window->bind(gimpl->signalPointsBuffer));
-    }
+        JST_CHECK(window->build(handle, cfg));
+        return window->bind(handle);
+    };
 
-    {
-        auto [buffer, enableZeroCopy] = ConvertToOptimalStorage(window, gimpl->signalVertices);
+    JST_CHECK(buildTensorBuffer(gimpl->signalPoints,
+                                gimpl->signalPointsBuffer,
+                                Render::Buffer::Target::STORAGE));
 
-        Render::Buffer::Config cfg;
-        cfg.buffer = buffer;
-        cfg.elementByteSize = sizeof(F32);
-        cfg.size = gimpl->signalVertices.size();
-        cfg.target = Render::Buffer::Target::VERTEX | Render::Buffer::Target::STORAGE;
-        cfg.enableZeroCopy = enableZeroCopy;
-        JST_CHECK(window->build(gimpl->signalVerticesBuffer, cfg));
-        JST_CHECK(window->bind(gimpl->signalVerticesBuffer));
-    }
+    JST_CHECK(buildTensorBuffer(gimpl->signalVertices,
+                                gimpl->signalVerticesBuffer,
+                                Render::Buffer::Target::VERTEX | Render::Buffer::Target::STORAGE));
 
     {
         Render::Kernel::Config cfg;

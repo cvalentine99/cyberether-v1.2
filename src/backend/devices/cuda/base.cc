@@ -87,22 +87,26 @@ CUDA::CUDA(const Config& config) : config(config), cache({}) {
     {
         int query = 0;
 
-        // TODO: Find a valid attribute for this.
-        cache.canImportDeviceMemory = true;
+#if defined(JST_OS_WINDOWS)
+        constexpr auto externalHandleAttribute = CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_WIN32_HANDLE_SUPPORTED;
+#else
+        constexpr auto externalHandleAttribute = CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR_SUPPORTED;
+#endif
 
         JST_CUDA_CHECK_THROW(cuDeviceGetAttribute(&query,
-                                                  CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR_SUPPORTED,
+                                                  externalHandleAttribute,
                                                   device), [&]{
             JST_FATAL("[CUDA] Cannot get device attribute: {}", err);
         });
-        cache.canExportDeviceMemory = query;
+        cache.canExportDeviceMemory = query != 0;
+        cache.canImportDeviceMemory = cache.canExportDeviceMemory;
 
         JST_CUDA_CHECK_THROW(cuDeviceGetAttribute(&query,
                                                   CU_DEVICE_ATTRIBUTE_CAN_USE_HOST_POINTER_FOR_REGISTERED_MEM,
                                                   device), [&]{
             JST_FATAL("[CUDA] Cannot get device attribute: {}", err);
         });
-        cache.canImportHostMemory = query;
+        cache.canImportHostMemory = query != 0;
     }
 
     // Print device information.

@@ -41,6 +41,11 @@ FilterTaps<D, T>::~FilterTaps() {
 }
 template<Device D, typename T>
 Result FilterTaps<D, T>::Impl::generateSincFunction(FilterTaps<D, T>& m) {
+    if (m.config.sampleRate <= 0.0f) {
+        JST_ERROR("Invalid sample rate. Sample rate must be greater than zero to compute filter taps.");
+        return Result::ERROR;
+    }
+
     const F64 filterWidth = (m.config.bandwidth / m.config.sampleRate) / 2.0;
 
     for (U64 i = 0; i < m.config.taps; i++) {
@@ -148,10 +153,21 @@ Result FilterTaps<D, T>::compute(const Context&) {
     // Merge all coefficients.
 
     for (U64 c = 0; c < config.center.size(); c++) {
+        F64 channelGain = 0.0;
+
         for (U64 i = 0; i < config.taps; i++) {
-            output.coeffs[{c, i}] = impl->sincCoeffs[{i}] *
-                                    impl->windowCoeffs[{i}] *
-                                    impl->upconvertCoeffs[{c, i}];
+            const auto coeff = impl->sincCoeffs[{i}] *
+                               impl->windowCoeffs[{i}] *
+                               impl->upconvertCoeffs[{c, i}];
+            output.coeffs[{c, i}] = coeff;
+            channelGain += static_cast<F64>(coeff.real());
+        }
+
+        if (channelGain != 0.0) {
+            const F64 invGain = 1.0 / channelGain;
+            for (U64 i = 0; i < config.taps; i++) {
+                output.coeffs[{c, i}] *= invGain;
+            }
         }
     }
 

@@ -28,8 +28,10 @@ class Window {
  public:
     struct Config {
         F32 scale = 1.0f;
+        U32 attachmentDestructionDelay = 4;
 
-        JST_SERDES(scale);
+        JST_SERDES(scale,
+                   attachmentDestructionDelay);
     };
 
     struct Stats {

@@ -104,7 +104,10 @@ def plot(data: np.ndarray,
     # Check batch.
     #
 
-    # TODO: Implement.
+    if batch_axis >= len(data.shape) and batch_axis != -1:
+        raise ValueError(f"Invalid batch axis: {batch_axis}")
+    if batch_axis < -1:
+        raise ValueError(f"Batch axis must be -1 or a valid dimension, got {batch_axis}")
 
     #
     # Check channel.
@@ -115,6 +118,9 @@ def plot(data: np.ndarray,
 
     if (channel_index + 1) > data.shape[channel_axis]:
         raise ValueError(f"Invalid channel index: {channel_index}")
+
+    if batch_axis != -1 and channel_axis != -1 and batch_axis == channel_axis:
+        raise ValueError("Batch axis and channel axis must be different")
 
     #
     # Plot.

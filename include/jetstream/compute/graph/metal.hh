@@ -44,8 +44,6 @@ class Metal : public Graph {
     }
 
  private:
-    NS::AutoreleasePool* innerPool;
-
     MTL::CommandQueue* _commandQueue;
     MTL::CommandBuffer* _commandBuffer;
 };

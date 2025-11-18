@@ -7,6 +7,9 @@
 
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_core.h>
+#ifdef JETSTREAM_BACKEND_CUDA_AVAILABLE
+#include "nvml.h"
+#endif
 #include <vulkan/vulkan_beta.h>
 #if defined(JST_OS_LINUX)
 #include <xcb/xcb.h>
@@ -149,6 +152,11 @@ class Vulkan {
     } cache;
 
     VkDebugReportCallbackEXT debugReportCallback{};
+
+#ifdef JETSTREAM_BACKEND_CUDA_AVAILABLE
+    bool nvmlMonitoringEnabled = false;
+    nvmlDevice_t nvmlDeviceHandle = nullptr;
+#endif
 
     std::set<std::string> getRequiredInstanceExtensions();
     std::set<std::string> getOptionalInstanceExtensions();

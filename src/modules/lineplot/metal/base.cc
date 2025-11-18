@@ -1,6 +1,12 @@
+#include <algorithm>
+
 #include "../generic.cc"
 
 namespace Jetstream {
+
+namespace {
+constexpr NSUInteger kLineplotThreadgroupWidth = 256;
+}
 
 // TODO: Improve performance.
 
@@ -17,31 +23,49 @@ static const char shadersSrc[] = R"""(
         size_t decimation;
     };
 
-    // TODO: This can be ported to use shared memory and other tricks.
-    //       Good enough for now.
+    constant ushort kLineplotThreadgroupWidth = 256;
+
     kernel void lineplot(constant Constants& constants [[ buffer(0) ]],
                          constant const float *input [[ buffer(1) ]],
                          device float2 *bins [[ buffer(2) ]],
-                         uint id[[ thread_position_in_grid ]]) {
+                         uint id[[ thread_position_in_grid ]],
+                         ushort thread_idx [[ thread_position_in_threadgroup ]]) {
+        threadgroup float sharedX[kLineplotThreadgroupWidth];
+        threadgroup float sharedAverage[kLineplotThreadgroupWidth];
+
         if (id >= constants.gridSize) {
             return;
         }
 
+        // Stage historical averages inside fast shared memory so multiple updates
+        // in the same threadgroup do not thrash device memory.
+        sharedAverage[thread_idx] = bins[id].y;
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        const uint baseIndex = id * constants.decimation;
+        const uint stride = constants.gridSize;
+
         // Compute average amplitude within a batch.
         float amplitude = 0.0f;
         for (uint i = 0; i < constants.batchSize; ++i) {
-            amplitude += input[(id * constants.decimation) + (i * constants.gridSize)];
+            amplitude += input[baseIndex + (i * stride)];
         }
         amplitude = (amplitude * constants.normalizationFactor) - 1.0f;
 
-        // Calculate moving average.
-        float average = bins[id].y;
+        // Calculate moving average using the staged value.
+        float average = sharedAverage[thread_idx];
         average -= average / constants.average;
         average += amplitude / constants.average;
 
-        // Store result.
-        bins[id].x = id * 2.0f / (constants.gridSize - 1) - 1.0f;
-        bins[id].y = average;
+        // Store result back through threadgroup memory to keep the number of
+        // global transactions to a minimum.
+        sharedX[thread_idx] = id * 2.0f / (constants.gridSize - 1) - 1.0f;
+        sharedAverage[thread_idx] = average;
+
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        bins[id].x = sharedX[thread_idx];
+        bins[id].y = sharedAverage[thread_idx];
     }
 )""";
 
@@ -101,8 +125,14 @@ Result Lineplot<D, T>::compute(const Context& ctx) {
         cmdEncoder->setBuffer(pimpl->constants.data(), 0, 0);
         cmdEncoder->setBuffer(input.buffer.data(), 0, 1);
         cmdEncoder->setBuffer(gimpl->signalPoints.data(), 0, 2);
+        const NSUInteger maxThreads = pimpl->lineplotState->maxTotalThreadsPerThreadgroup();
+        const NSUInteger threadsPerGroup = std::max<NSUInteger>(
+            1,
+            std::min<NSUInteger>({maxThreads,
+                                  static_cast<NSUInteger>(gimpl->numberOfElements),
+                                  kLineplotThreadgroupWidth}));
         cmdEncoder->dispatchThreads(MTL::Size(gimpl->numberOfElements, 1, 1),
-                                    MTL::Size(pimpl->lineplotState->maxTotalThreadsPerThreadgroup(), 1, 1));
+                                    MTL::Size(threadsPerGroup, 1, 1));
         cmdEncoder->endEncoding();
     }
 

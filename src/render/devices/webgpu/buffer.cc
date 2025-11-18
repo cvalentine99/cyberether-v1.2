@@ -81,7 +81,8 @@ Result Implementation::update(const U64& offset, const U64& size) {
     const auto& byteSize = size * config.elementByteSize;
 
     WGPUQueue queue = wgpuDeviceGetQueue(device);
-    wgpuQueueWriteBuffer(queue, buffer, byteOffset, (uint8_t*)config.buffer + byteOffset, byteSize);
+    auto host = static_cast<const uint8_t*>(config.buffer);
+    wgpuQueueWriteBuffer(queue, buffer, byteOffset, host + byteOffset, byteSize);
 
     return Result::SUCCESS;
 }

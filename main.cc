@@ -29,6 +29,8 @@ int main(int argc, char* argv[]) {
     std::string flowgraphPath;
     Device prefferedBackend = Device::None;
 
+    bool validationExplicitlyDisabled = false;
+
     for (int i = 1; i < argc; i++) {
         const std::string arg = std::string(argv[i]);
 
@@ -38,10 +40,18 @@ int main(int argc, char* argv[]) {
             continue;
         }
 
+        if (arg == "--auto-join") {
+            viewportConfig.autoJoin = true;
+
+            continue;
+        }
+
         if (arg == "--broker") {
-            if (i + 1 < argc) {
-                viewportConfig.broker = argv[++i];
+            if (i + 1 >= argc) {
+                std::cerr << "[ERROR] --broker requires a URL." << std::endl;
+                return 1;
             }
+            viewportConfig.broker = argv[++i];
 
             continue;
         }
@@ -66,6 +76,7 @@ int main(int argc, char* argv[]) {
 
         if (arg == "--no-validation") {
             backendConfig.validationEnabled = false;
+            validationExplicitlyDisabled = true;
 
             continue;
         }
@@ -115,26 +126,32 @@ int main(int argc, char* argv[]) {
         }
 
         if (arg == "--framerate") {
-            if (i + 1 < argc) {
-                viewportConfig.framerate = std::stoul(argv[++i]);
+            if (i + 1 >= argc) {
+                std::cerr << "[ERROR] --framerate requires a value." << std::endl;
+                return 1;
             }
+            viewportConfig.framerate = std::stoul(argv[++i]);
 
             continue;
         }
 
         if (arg == "--multisampling") {
-            if (i + 1 < argc) {
-                backendConfig.multisampling = std::stoul(argv[++i]);
+            if (i + 1 >= argc) {
+                std::cerr << "[ERROR] --multisampling requires a value." << std::endl;
+                return 1;
             }
+            backendConfig.multisampling = std::stoul(argv[++i]);
 
             continue;
         }
 
         if (arg == "--size") {
-            if (i + 2 < argc) {
-                viewportConfig.size.x = std::stoul(argv[++i]);
-                viewportConfig.size.y = std::stoul(argv[++i]);
+            if (i + 2 >= argc) {
+                std::cerr << "[ERROR] --size requires width and height values." << std::endl;
+                return 1;
             }
+            viewportConfig.size.x = std::stoul(argv[++i]);
+            viewportConfig.size.y = std::stoul(argv[++i]);
 
             continue;
         }
@@ -158,25 +175,31 @@ int main(int argc, char* argv[]) {
         }
 
         if (arg == "--device-id") {
-            if (i + 1 < argc) {
-                backendConfig.deviceId = std::stoul(argv[++i]);
+            if (i + 1 >= argc) {
+                std::cerr << "[ERROR] --device-id requires a numeric value." << std::endl;
+                return 1;
             }
+            backendConfig.deviceId = std::stoul(argv[++i]);
 
             continue;
         }
 
         if (arg == "--staging-buffer") {
-            if (i + 1 < argc) {
-                backendConfig.stagingBufferSize = std::stoul(argv[++i])*1024*1024;
+            if (i + 1 >= argc) {
+                std::cerr << "[ERROR] --staging-buffer requires a size in megabytes." << std::endl;
+                return 1;
             }
+            backendConfig.stagingBufferSize = std::stoul(argv[++i]) * 1024 * 1024;
 
             continue;
         }
 
         if (arg == "--scale") {
-            if (i + 1 < argc) {
-                renderConfig.scale = std::stof(argv[++i]);
+            if (i + 1 >= argc) {
+                std::cerr << "[ERROR] --scale requires a numeric value." << std::endl;
+                return 1;
             }
+            renderConfig.scale = std::stof(argv[++i]);
 
             continue;
         }
@@ -185,6 +208,7 @@ int main(int argc, char* argv[]) {
             std::cout << "Usage: " << argv[0] << " [options] [flowgraph]" << std::endl;
             std::cout << "Options:" << std::endl;
             std::cout << "  --remote                Enable remote viewport mode." << std::endl;
+            std::cout << "  --auto-join             Automatically approve remote sessions (insecure)." << std::endl;
             std::cout << "  --broker [url]          Set the broker of the remote viewport. Default: `https://api.cyberether.org`" << std::endl;
             std::cout << "  --backend [backend]     Set the preferred backend (`Metal`, `Vulkan`, or `WebGPU`)." << std::endl;
             std::cout << "  --framerate [value]     Set the framerate of the te viewport (FPS). Default: `60`" << std::endl;
@@ -211,6 +235,13 @@ int main(int argc, char* argv[]) {
         }
 
         flowgraphPath = arg;
+    }
+
+    if (validationExplicitlyDisabled &&
+        (prefferedBackend != Device::Vulkan && prefferedBackend != Device::None)) {
+        std::cerr << "[WARN] --no-validation currently only affects Vulkan backends. "
+                  << "Validation will remain enabled for the selected backend." << std::endl;
+        backendConfig.validationEnabled = true;
     }
 
     // Instance creation.

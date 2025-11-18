@@ -1,4 +1,6 @@
+#include <chrono>
 #include <ranges>
+#include <thread>
 
 #include "jetstream/compute/scheduler.hh"
 
@@ -212,18 +214,31 @@ Result Scheduler::compute() {
     {
         computeWait.test_and_set();
 
-        wait:
-        for (const auto& graph : graphs) {
-            const auto& res = graph->computeReady();
-            if (res == Result::TIMEOUT) {
-                // Yes, I used a goto. Sue me.
-                goto wait;
+        while (true) {
+            bool allReady = true;
+
+            for (const auto& graph : graphs) {
+                const auto& res = graph->computeReady();
+                if (res == Result::TIMEOUT) {
+                    allReady = false;
+                    break;
+                }
+                JST_CHECK(res);
             }
-            JST_CHECK(res);
+
+            if (allReady || computeHalt.test()) {
+                break;
+            }
+
+            std::this_thread::sleep_for(std::chrono::microseconds(200));
         }
 
         computeWait.clear();
         computeWait.notify_all();
+    }
+
+    if (computeHalt.test()) {
+        return Result::SUCCESS;
     }
 
     Result res = Result::SUCCESS;

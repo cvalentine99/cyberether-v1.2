@@ -1,8 +1,14 @@
+#include <algorithm>
+
 #include "../generic.cc"
 
 #include "jetstream/memory/devices/cuda/copy.hh"
 
 namespace Jetstream {
+
+namespace {
+constexpr U64 kLineplotThreadsPerBlock = 256;
+}
 
 template<Device D, typename T>
 struct Lineplot<D, T>::Impl {
@@ -57,33 +63,51 @@ Result Lineplot<D, T>::createCompute(const Context& ctx) {
             return ptr[jst_tensor_offset(coords, meta.strides, meta.rank)];
         }
 
+        constexpr int kBlockWidth = 256;
+
         __global__ void lineplot(const Meta input, float2* output, float normalizationFactor, size_t numberOfBatches, size_t numberOfElements, size_t averaging, size_t decimation) {
             size_t id = blockIdx.x * blockDim.x + threadIdx.x;
+            __shared__ float sharedAverage[kBlockWidth];
+            __shared__ float sharedX[kBlockWidth];
+
             if (id < numberOfElements) {
-                // Compute average amplitude within a batch.
-                float amplitude = 0.0f;
-                for (size_t i = 0; i < numberOfBatches; ++i) {
-                    const size_t sampleIndex = (id * decimation) + (i * numberOfElements);
-                    amplitude += tensor_read(input, sampleIndex);
-                }
-                amplitude = (amplitude * normalizationFactor) - 1.0f;
-
-                // Calculate moving average.
-                float average = output[id].y;
-                average -= average / averaging;
-                average += amplitude / averaging;
-
-                // Store result.
-                output[id].x = id * 2.0f / (numberOfElements - 1) - 1.0f;
-                output[id].y = average;
+                sharedAverage[threadIdx.x] = output[id].y;
             }
+            __syncthreads();
+
+            if (id >= numberOfElements) {
+                return;
+            }
+
+            // Compute average amplitude within a batch.
+            float amplitude = 0.0f;
+            const size_t baseIndex = id * decimation;
+            for (size_t i = 0; i < numberOfBatches; ++i) {
+                const size_t sampleIndex = baseIndex + (i * numberOfElements);
+                amplitude += tensor_read(input, sampleIndex);
+            }
+            amplitude = (amplitude * normalizationFactor) - 1.0f;
+
+            // Calculate moving average using shared memory staging.
+            float average = sharedAverage[threadIdx.x];
+            average -= average / averaging;
+            average += amplitude / averaging;
+
+            sharedX[threadIdx.x] = id * 2.0f / (numberOfElements - 1) - 1.0f;
+            sharedAverage[threadIdx.x] = average;
+
+            __syncthreads();
+
+            output[id].x = sharedX[threadIdx.x];
+            output[id].y = sharedAverage[threadIdx.x];
         }
     )""",
                            {CUDA::KernelHeader::TENSOR});
 
     // Initialize kernel size.
 
-    U64 threadsPerBlock = 256;
+    const U64 threadsPerBlock = std::min<U64>(kLineplotThreadsPerBlock,
+                                              gimpl->numberOfElements == 0 ? 1 : gimpl->numberOfElements);
     U64 blocksPerGrid = (gimpl->numberOfElements + threadsPerBlock - 1) / threadsPerBlock;
 
     pimpl->grid = { blocksPerGrid, 1, 1 };
@@ -133,7 +157,10 @@ Result Lineplot<D, T>::compute(const Context& ctx) {
         JST_CHECK(Memory::Copy(pimpl->input, input.buffer, ctx.cuda->stream()));
     }
 
-    // TODO: Join kernels.
+    const U64 threadsPerBlock = std::min<U64>(kLineplotThreadsPerBlock,
+                                              gimpl->numberOfElements == 0 ? 1 : gimpl->numberOfElements);
+    pimpl->block[0] = threadsPerBlock;
+    pimpl->grid[0] = (gimpl->numberOfElements + threadsPerBlock - 1) / threadsPerBlock;
 
     JST_CHECK(ctx.cuda->launchKernel("lineplot",
                                      pimpl->grid,

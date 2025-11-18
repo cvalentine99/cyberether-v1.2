@@ -3,6 +3,10 @@
 #include "jetstream/backend/devices/vulkan/base.hh"
 #include "jetstream/backend/devices/vulkan/helpers.hh"
 
+#ifdef JETSTREAM_BACKEND_CUDA_AVAILABLE
+#include "nvml.h"
+#endif
+
 #if defined(JST_OS_MAC) || defined(JST_OS_IOS)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wgnu-anonymous-struct"
@@ -403,6 +407,16 @@ Vulkan::Vulkan(const Config& _config) : config(_config), cache({}) {
     cache.canExportDeviceMemory = supportedDeviceExtensions.contains(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
     cache.canImportHostMemory = supportedDeviceExtensions.contains(VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME);
 
+#ifdef JETSTREAM_BACKEND_CUDA_AVAILABLE
+    if (nvmlInit() == NVML_SUCCESS) {
+        if (nvmlDeviceGetHandleByIndex(static_cast<unsigned int>(config.deviceId), &nvmlDeviceHandle) == NVML_SUCCESS) {
+            nvmlMonitoringEnabled = true;
+        } else {
+            nvmlShutdown();
+        }
+    }
+#endif
+
     // Create logical device.
 
     {
@@ -631,6 +645,14 @@ Vulkan::~Vulkan() {
 
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(instance, nullptr);
+
+#ifdef JETSTREAM_BACKEND_CUDA_AVAILABLE
+    if (nvmlMonitoringEnabled) {
+        nvmlShutdown();
+        nvmlMonitoringEnabled = false;
+        nvmlDeviceHandle = nullptr;
+    }
+#endif
 }
 
 VkSampleCountFlagBits Vulkan::getMultisampling() const {
@@ -693,6 +715,14 @@ bool Vulkan::getLowPowerStatus() const {
     bool lowPower = info->isLowPowerModeEnabled();
     info->release();
     return lowPower;
+#elif defined(JETSTREAM_BACKEND_CUDA_AVAILABLE)
+    if (nvmlMonitoringEnabled) {
+        nvmlPstates_t pState;
+        if (nvmlDeviceGetPowerState(nvmlDeviceHandle, &pState) == NVML_SUCCESS) {
+            return pState >= NVML_PSTATE_8;
+        }
+    }
+    return false;
 #else
     // Power status monitoring not available on this platform.
     // Return false (not in low power mode) as a sensible default.
@@ -708,6 +738,23 @@ U64 Vulkan::getThermalState() const {
     U64 thermal = info->thermalState();
     info->release();
     return thermal;
+#elif defined(JETSTREAM_BACKEND_CUDA_AVAILABLE)
+    if (nvmlMonitoringEnabled) {
+        unsigned int temperature = 0;
+        if (nvmlDeviceGetTemperature(nvmlDeviceHandle, NVML_TEMPERATURE_GPU, &temperature) == NVML_SUCCESS) {
+            if (temperature < 70) {
+                return 0;
+            }
+            if (temperature < 80) {
+                return 1;
+            }
+            if (temperature < 90) {
+                return 2;
+            }
+            return 3;
+        }
+    }
+    return 0;
 #else
     // Thermal state monitoring not available on this platform.
     // Return 0 (nominal thermal state) as a sensible default.

@@ -21,7 +21,7 @@ Result Implementation::create() {
         textureDesc->setTextureType(MTL::TextureType2DMultisample);
     }
 
-    // TODO: Check if memoryless is an option here.
+    // TODO(render-device): Check if memoryless allocations are viable for transient render targets.
 
     textureDesc->setUsage(MTL::TextureUsagePixelFormatView |
                           MTL::TextureUsageRenderTarget |
@@ -77,7 +77,8 @@ Result Implementation::fillRow(const U64& y, const U64& height) {
     auto region = MTL::Region::Make2D(0, y, config.size.x, height);
     auto rowByteSize = config.size.x * GetPixelByteSize(texture->pixelFormat());
     auto bufferByteOffset = rowByteSize * y;
-    texture->replaceRegion(region, 0, config.buffer + bufferByteOffset, rowByteSize);
+    const auto* raw = static_cast<const uint8_t*>(config.buffer);
+    texture->replaceRegion(region, 0, raw + bufferByteOffset, rowByteSize);
 
     return Result::SUCCESS;
 }

@@ -43,6 +43,8 @@ struct NodeState {
     std::unordered_map<PinId, Locale> outputs;
     std::unordered_set<NodeId> edges;
     bool enabled = true;
+    Block::State cachedState;
+    bool hasCachedState = false;
 };
 
 }  // namespace Jetstream::CompositorDetail

@@ -69,8 +69,7 @@ class FileWriter : public Module, public Compute {
     }
 
     constexpr Taint taint() const {
-        // TODO: Implement discontiguous support for this module.
-        return Taint::CLEAN;
+        return Taint::DISCONTIGUOUS;
     }
 
     void info() const final;

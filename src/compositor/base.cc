@@ -579,13 +579,28 @@ Result Compositor::processInteractions() {
         const auto& [locale, enable] = *toggleBlockMailbox;
         if (nodeStates.contains(locale.block())) {
             auto& state = nodeStates.at(locale.block());
-            state.enabled = enable;
-            if (!enable) {
+            if (!enable && state.enabled) {
+                state.cachedState = state.block->state;
+                state.hasCachedState = true;
                 state.block->state.viewEnabled = false;
                 state.block->state.controlEnabled = false;
                 state.block->state.previewEnabled = false;
                 state.block->state.fullscreenEnabled = false;
+                state.enabled = false;
+            } else if (enable && !state.enabled) {
+                state.enabled = true;
+                if (state.hasCachedState) {
+                    state.block->state = state.cachedState;
+                } else {
+                    state.block->state.viewEnabled = state.block->shouldDrawView();
+                    state.block->state.controlEnabled = state.block->shouldDrawControl();
+                    state.block->state.previewEnabled = state.block->shouldDrawPreview();
+                    state.block->state.fullscreenEnabled = false;
+                }
+            } else {
+                state.enabled = enable;
             }
+
             const char* toast = enable ? "Node enabled." : "Node disabled.";
             ImGui::InsertNotification({ enable ? ImGuiToastType_Success
                                                : ImGuiToastType_Info,
@@ -1423,11 +1438,35 @@ Result Compositor::drawStatic() {
             return;
         }
 
+        const bool editorFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+        const bool ctrlHeld = ImGui::GetIO().KeyCtrl;
+        const bool shiftHeld = ImGui::GetIO().KeyShift;
+
+        if (editorFocused && ctrlHeld) {
+            if (ImGui::IsKeyPressed(ImGuiKey_S)) {
+                applyFlowgraphMailbox = std::vector<char>(flowgraphSourceBuffer.begin(),
+                                                          flowgraphSourceBuffer.end());
+            } else if (ImGui::IsKeyPressed(ImGuiKey_R)) {
+                if (shiftHeld) {
+                    updateFlowgraphBlobMailbox = true;
+                } else if (flowgraphSourceDirty) {
+                    flowgraphSourceDirty = false;
+                    updateFlowgraphBlobMailbox = true;
+                }
+            }
+        }
+
         if (flowgraphSourceBuffer.empty()) {
             ImGui::Text("Empty source file.");
         } else {
+            ImGui::TextDisabled(flowgraphSourceDirty ? ICON_FA_CIRCLE_EXCLAMATION " Unsaved changes"
+                                                     : ICON_FA_CIRCLE_CHECK " Up to date");
+            ImGui::SameLine();
+            ImGui::TextDisabled(ICON_FA_KEYBOARD " Ctrl+S apply, Ctrl+R revert, Ctrl+Shift+R reload");
+
             const ImVec2 editorSize = ImVec2(ImGui::GetContentRegionAvail().x,
-                                             ImGui::GetTextLineHeightWithSpacing() * 16.0f);
+                                             std::max(150.0f * scalingFactor,
+                                                      ImGui::GetContentRegionAvail().y - ImGui::GetFrameHeightWithSpacing()));
             const ImGuiInputTextFlags editorFlags = ImGuiInputTextFlags_AllowTabInput |
                                                     ImGuiInputTextFlags_NoHorizontalScroll;
             if (ImGui::InputTextMultiline("##SourceFileData",
@@ -1997,12 +2036,13 @@ Result Compositor::drawStatic() {
 
             const ImGuiTableFlags tableFlags = ImGuiTableFlags_PadOuterX;
             if (ImGui::BeginTable("##flowgraph-info-table", 2, tableFlags)) {
+                ImGui::PushTextWrapPos(0.0f);
                 ImGui::TableSetupColumn("##flowgraph-info-table-labels", ImGuiTableColumnFlags_WidthStretch, 0.20f);
                 ImGui::TableSetupColumn("##flowgraph-info-table-values", ImGuiTableColumnFlags_WidthStretch, 0.80f);
 
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("Title:");
+                ImGui::TextUnformatted("Title:");
                 ImGui::TableSetColumnIndex(1);
                 ImGui::SetNextItemWidth(-1);
                 auto title = instance.flowgraph().title();
@@ -2012,7 +2052,7 @@ Result Compositor::drawStatic() {
 
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("Summary:");
+                ImGui::TextUnformatted("Summary:");
                 ImGui::TableSetColumnIndex(1);
                 ImGui::SetNextItemWidth(-1);
                 auto summary = instance.flowgraph().summary();
@@ -2022,7 +2062,7 @@ Result Compositor::drawStatic() {
 
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("Author:");
+                ImGui::TextUnformatted("Author:");
                 ImGui::TableSetColumnIndex(1);
                 ImGui::SetNextItemWidth(-1);
                 auto author = instance.flowgraph().author();
@@ -2032,7 +2072,7 @@ Result Compositor::drawStatic() {
 
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("License:");
+                ImGui::TextUnformatted("License:");
                 ImGui::TableSetColumnIndex(1);
                 ImGui::SetNextItemWidth(-1);
                 auto license = instance.flowgraph().license();
@@ -2042,7 +2082,7 @@ Result Compositor::drawStatic() {
 
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                ImGui::Text("Description:");
+                ImGui::TextUnformatted("Description:");
                 ImGui::TableSetColumnIndex(1);
                 ImGui::SetNextItemWidth(-1);
                 auto description = instance.flowgraph().description();
@@ -2057,6 +2097,7 @@ Result Compositor::drawStatic() {
                     JST_CHECK_THROW(instance.flowgraph().setDescription(description));
                 }
 
+                ImGui::PopTextWrapPos();
                 ImGui::EndTable();
             }
 

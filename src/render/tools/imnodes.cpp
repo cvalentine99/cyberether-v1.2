@@ -512,23 +512,11 @@ void DrawListSortChannelsByDepth(const ImVector<int>& node_idx_depth_order)
         }
     }
 
-    // TODO: this is an O(N^2) algorithm. It might be worthwhile revisiting this to see if the time
-    // complexity can be reduced.
-
     for (int depth_idx = start_idx; depth_idx > 0; --depth_idx)
     {
         const int node_idx = node_idx_depth_order[depth_idx];
 
-        // Find the current index of the node_idx in the submission order array
-        int submission_idx = -1;
-        for (int i = 0; i < GImNodes->NodeIdxSubmissionOrder.Size; ++i)
-        {
-            if (GImNodes->NodeIdxSubmissionOrder[i] == node_idx)
-            {
-                submission_idx = i;
-                break;
-            }
-        }
+        const int submission_idx = GImNodes->NodeIdxToSubmissionIdx.GetInt(static_cast<ImGuiID>(node_idx), -1);
         IM_ASSERT(submission_idx >= 0);
 
         if (submission_idx == depth_idx)
@@ -536,11 +524,13 @@ void DrawListSortChannelsByDepth(const ImVector<int>& node_idx_depth_order)
             continue;
         }
 
-        for (int j = submission_idx; j < depth_idx; ++j)
-        {
-            DrawListSwapSubmissionIndices(j, j + 1);
-            ImSwap(GImNodes->NodeIdxSubmissionOrder[j], GImNodes->NodeIdxSubmissionOrder[j + 1]);
-        }
+        const int displaced_node = GImNodes->NodeIdxSubmissionOrder[depth_idx];
+
+        DrawListSwapSubmissionIndices(submission_idx, depth_idx);
+        ImSwap(GImNodes->NodeIdxSubmissionOrder[submission_idx], GImNodes->NodeIdxSubmissionOrder[depth_idx]);
+
+        GImNodes->NodeIdxToSubmissionIdx.SetInt(static_cast<ImGuiID>(node_idx), depth_idx);
+        GImNodes->NodeIdxToSubmissionIdx.SetInt(static_cast<ImGuiID>(displaced_node), submission_idx);
     }
 }
 

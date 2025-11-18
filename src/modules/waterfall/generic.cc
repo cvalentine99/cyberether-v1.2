@@ -1,4 +1,5 @@
 #include "jetstream/modules/waterfall.hh"
+#include "jetstream/modules/detail/waterfall_plan.hh"
 #include "jetstream/render/utils.hh"
 
 #include "resources/shaders/waterfall_shaders.hh"
@@ -212,20 +213,22 @@ Result Waterfall<D, T>::destroyPresent() {
 
 template<Device D, typename T>
 Result Waterfall<D, T>::present() {
-    int start = gimpl->last;
-    int blocks = (gimpl->inc - gimpl->last);
+    // Update the GPU buffer with every row that was rewritten since the last
+    // present call. The helper produces up to two ranges: the contiguous block
+    // of rows between `last` and the end of the texture, and the wrapped block
+    // at the beginning (if any). This avoids overrunning the backing storage
+    // when `inc` wraps around the waterfall height.
+    const auto updatePlan = detail::ComputeWaterfallUpdateRanges(gimpl->last, gimpl->inc, config.height);
+    for (const auto& range : updatePlan) {
+        if (range.empty()) {
+            continue;
+        }
 
-    // TODO: Fix this horrible thing.
-    if (blocks < 0) {
-        blocks = config.height - gimpl->last;
-
-        gimpl->signalBuffer->update(start * gimpl->numberOfElements, blocks * gimpl->numberOfElements);
-
-        start = 0;
-        blocks = gimpl->inc;
+        const U64 elements = static_cast<U64>(range.blockCount) * gimpl->numberOfElements;
+        const U64 offset = static_cast<U64>(range.startRow) * gimpl->numberOfElements;
+        gimpl->signalBuffer->update(offset, elements);
     }
 
-    gimpl->signalBuffer->update(start * gimpl->numberOfElements, blocks * gimpl->numberOfElements);
     gimpl->last = gimpl->inc;
 
     gimpl->signalUniforms.zoom = config.zoom;

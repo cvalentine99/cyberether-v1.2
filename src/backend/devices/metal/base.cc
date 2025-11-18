@@ -23,7 +23,11 @@ Metal::Metal(const Config& config) : config(config) {
         JST_WARN("Device ID {} out of range (only {} devices available). Using default device.",
                  config.deviceId, devices->count());
         device = MTL::CreateSystemDefaultDevice();
+        if (device) {
+            device->retain();
+        }
         devices->release();
+        this->config.deviceId = 0;
     } else {
         device = devices->object<MTL::Device>(config.deviceId);
         device->retain();  // Retain since we're storing a reference.

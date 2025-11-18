@@ -35,7 +35,7 @@ Result Implementation::create() {
     imageCreateInfo.format = pixelFormat;
     imageCreateInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageCreateInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    // TODO: Review these.
+    // TODO(render-device): Review usage flags and expose them through the public texture config API.
     imageCreateInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
                             VK_IMAGE_USAGE_TRANSFER_DST_BIT | 
                             VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
@@ -222,34 +222,45 @@ Result Implementation::fillRow(const U64& y, const U64& height) {
         return Result::SUCCESS;
     }
 
-    // TODO: Implement zero-copy option.
-
     auto& backend = Backend::State<Device::Vulkan>();
 
-    uint8_t* mappedData = static_cast<uint8_t*>(backend->getStagingBufferMappedMemory());
-    const uint8_t* hostData = static_cast<const uint8_t*>(config.buffer);
     const auto rowByteSize = config.size.x * GetPixelByteSize(pixelFormat);
     const auto bufferByteOffset = rowByteSize * y;
     const auto bufferByteSize = rowByteSize * height;
 
-    if (bufferByteSize >= backend->getStagingBufferSize()) {
-        JST_ERROR("[VULKAN] Memory copy is larger than the staging buffer.");
-        return Result::ERROR;
-    }
+    VkBuffer sourceBuffer = backend->getStagingBuffer();
+    VkDeviceSize sourceOffset = 0;
 
-    memcpy(mappedData, hostData + bufferByteOffset, bufferByteSize);
+    if (config.enableZeroCopy) {
+        if (config.buffer == nullptr) {
+            JST_ERROR("[VULKAN] Zero-copy texture upload requested but no buffer was provided.");
+            return Result::ERROR;
+        }
+
+        sourceBuffer = reinterpret_cast<VkBuffer>(const_cast<void*>(config.buffer));
+        sourceOffset = bufferByteOffset;
+    } else {
+        if (bufferByteSize >= backend->getStagingBufferSize()) {
+            JST_ERROR("[VULKAN] Memory copy is larger than the staging buffer.");
+            return Result::ERROR;
+        }
+
+        uint8_t* mappedData = static_cast<uint8_t*>(backend->getStagingBufferMappedMemory());
+        const auto* hostData = static_cast<const uint8_t*>(config.buffer);
+        memcpy(mappedData, hostData + bufferByteOffset, bufferByteSize);
+    }
 
     JST_CHECK(Backend::ExecuteOnce(backend->getDevice(),
                                    backend->getComputeQueue(),
                                    backend->getDefaultFence(),
                                    backend->getDefaultCommandBuffer(),
         [&](VkCommandBuffer& commandBuffer){
-            JST_CHECK(Backend::TransitionImageLayout(commandBuffer, 
-                                                     texture, 
+            JST_CHECK(Backend::TransitionImageLayout(commandBuffer,
+                                                     texture,
                                                      VK_IMAGE_LAYOUT_UNDEFINED,
                                                      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
             VkBufferImageCopy region{};
-            region.bufferOffset = 0;
+            region.bufferOffset = sourceOffset;
             region.bufferRowLength = 0;
             region.bufferImageHeight = 0;
             region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -267,7 +278,7 @@ Result Implementation::fillRow(const U64& y, const U64& height) {
 
             vkCmdCopyBufferToImage(
                 commandBuffer,
-                backend->getStagingBuffer(),
+                sourceBuffer,
                 texture,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 1,

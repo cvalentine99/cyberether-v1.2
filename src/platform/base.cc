@@ -25,11 +25,34 @@ EM_JS(const char*, jst_file_path, (), {
 #include <windows.h>
 #include <comutil.h>
 #include <commdlg.h>
+#include <shobjidl.h>
 #include <stdio.h>
 #include <shellapi.h>
+#include <shobjidl.h>
 #undef ERROR
 #undef FATAL
 #endif
+
+namespace {
+
+#if defined(JST_OS_WINDOWS)
+std::string JSTWideToUtf8(const std::wstring& wstr) {
+    if (wstr.empty()) {
+        return {};
+    }
+
+    const int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (sizeNeeded <= 0) {
+        return {};
+    }
+
+    std::string result(static_cast<size_t>(sizeNeeded - 1), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, result.data(), sizeNeeded, nullptr, nullptr);
+    return result;
+}
+#endif
+
+}  // namespace
 
 namespace Jetstream::Platform {
 
@@ -292,8 +315,73 @@ Result PickFile(std::string& path, const std::vector<std::string>& extensions) {
 
 // Defined on apple.mm.
 
-// TODO: Implement folder picker for browsers.
-// #elif defined(JST_OS_BROWSER)
+#elif defined(JST_OS_BROWSER)
+
+EM_ASYNC_JS(void, jst_pick_folder, (), {
+    if (typeof window === 'undefined') {
+        console.error('Folder Picker: window is not defined.');
+        return;
+    }
+
+    if (!window.showDirectoryPicker) {
+        window.jst.error = 1;
+        window.jst.error_string = 'Folder picker is not supported in this browser.';
+        return;
+    }
+
+    async function copyDirectory(handle, destinationPath) {
+        FS.mkdirTree(destinationPath);
+        for await (const [name, entry] of handle.entries()) {
+            const entryPath = `${destinationPath}/${name}`;
+            if (entry.kind === 'file') {
+                const file = await entry.getFile();
+                const buffer = new Uint8Array(await file.arrayBuffer());
+                FS.mkdirTree(destinationPath);
+                try {
+                    FS.unlink(entryPath);
+                } catch (err) {
+                    // Ignore missing files.
+                }
+                FS.writeFile(entryPath, buffer);
+            } else if (entry.kind === 'directory') {
+                await copyDirectory(entry, entryPath);
+            }
+        }
+    }
+
+    return new Promise((resolve) => {
+        window
+            .showDirectoryPicker()
+            .then(async (handle) => {
+                FS.createPath('/', 'vfs');
+                const safeName = (handle.name && handle.name.length > 0) ? handle.name : 'folder';
+                const sanitized = safeName.replace(/[^A-Za-z0-9-_]/g, '_');
+                const uniqueSuffix = window.crypto && window.crypto.randomUUID ? window.crypto.randomUUID() : Date.now().toString();
+                const targetPath = `/vfs/${sanitized}_${uniqueSuffix}`;
+                await copyDirectory(handle, targetPath);
+                window.jst.fsHandle = handle;
+                window.jst.error = 0;
+                window.jst.path = targetPath;
+                resolve();
+            })
+            .catch((err) => {
+                console.log(err);
+                window.jst.error = 1;
+                window.jst.error_string = 'User cancelled folder picker.';
+                resolve();
+            });
+    });
+});
+
+Result PickFolder(std::string& path) {
+    jst_pick_folder();
+    if (jst_file_error()) {
+        JST_ERROR("{}", jst_file_error_string());
+        return Result::ERROR;
+    }
+    path = std::string(jst_file_path());
+    return Result::SUCCESS;
+}
 
 #elif defined(JST_OS_LINUX)
 
@@ -326,8 +414,85 @@ Result PickFolder(std::string& path) {
     return Result::SUCCESS;
 }
 
-// TODO: Implement folder picker for Windows.
-//#elif defined(JST_OS_WINDOWS)
+#elif defined(JST_OS_WINDOWS)
+
+Result PickFolder(std::string& path) {
+    HRESULT initHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    bool shouldUninitialize = false;
+    if (SUCCEEDED(initHr)) {
+        shouldUninitialize = true;
+    } else if (initHr != RPC_E_CHANGED_MODE) {
+        JST_ERROR("Failed to initialize COM library (hr=0x{:08X}).", static_cast<U32>(initHr));
+        return Result::ERROR;
+    }
+
+    IFileOpenDialog* dialog = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&dialog));
+    if (FAILED(hr) || dialog == nullptr) {
+        JST_ERROR("Failed to create folder dialog (hr=0x{:08X}).", static_cast<U32>(hr));
+        if (shouldUninitialize) {
+            CoUninitialize();
+        }
+        return Result::ERROR;
+    }
+
+    DWORD options = 0;
+    if (SUCCEEDED(dialog->GetOptions(&options))) {
+        dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM);
+    }
+
+    hr = dialog->Show(nullptr);
+    if (FAILED(hr)) {
+        if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED)) {
+            JST_ERROR("No folder selected or operation cancelled.");
+        } else {
+            JST_ERROR("Failed to open folder selection dialog (hr=0x{:08X}).", static_cast<U32>(hr));
+        }
+        dialog->Release();
+        if (shouldUninitialize) {
+            CoUninitialize();
+        }
+        return Result::ERROR;
+    }
+
+    IShellItem* item = nullptr;
+    hr = dialog->GetResult(&item);
+    if (FAILED(hr) || item == nullptr) {
+        JST_ERROR("Failed to retrieve selected folder (hr=0x{:08X}).", static_cast<U32>(hr));
+        dialog->Release();
+        if (shouldUninitialize) {
+            CoUninitialize();
+        }
+        return Result::ERROR;
+    }
+
+    PWSTR folderPathW = nullptr;
+    hr = item->GetDisplayName(SIGDN_FILESYSPATH, &folderPathW);
+    if (FAILED(hr) || folderPathW == nullptr) {
+        JST_ERROR("Failed to get folder path (hr=0x{:08X}).", static_cast<U32>(hr));
+        item->Release();
+        dialog->Release();
+        if (shouldUninitialize) {
+            CoUninitialize();
+        }
+        return Result::ERROR;
+    }
+
+    path = JSTWideToUtf8(std::wstring(folderPathW));
+    CoTaskMemFree(folderPathW);
+    item->Release();
+    dialog->Release();
+    if (shouldUninitialize) {
+        CoUninitialize();
+    }
+
+    if (path.empty()) {
+        JST_ERROR("No folder selected or operation cancelled.");
+        return Result::ERROR;
+    }
+
+    return Result::SUCCESS;
+}
 
 #else
 

@@ -10,8 +10,8 @@
 
 namespace Jetstream::Render::Components {
 
-// TODO: Add support for zero-copy buffers.
-// TODO: Implement proper rotation.
+// Supports zero-copy buffers when the render device exposes
+// native tensor storage for the backing arrays.
 
 class Shapes : public Generic {
  public:
@@ -36,6 +36,7 @@ class Shapes : public Generic {
     struct Config {
         Extent2D<F32> pixelSize = {0.0f, 0.0f};
         std::unordered_map<std::string, ElementConfig> elements;
+        bool enableZeroCopyBuffers = true;
     };
 
     Shapes(const Config& config);
@@ -61,6 +62,11 @@ class Shapes : public Generic {
     Result updateSizes(const std::string& elementId = {});
 
     Result updatePixelSize(const Extent2D<F32>& pixelSize);
+
+    Result setRotation(const std::string& elementId, F32 rotationDegrees);
+    Result setPosition(const std::string& elementId, const Extent2D<F32>& position);
+    Result setSize(const std::string& elementId, const Extent2D<F32>& size);
+    Result setColor(const std::string& elementId, const ColorRGBA<F32>& color);
 
     constexpr const Config& getConfig() const {
         return config;

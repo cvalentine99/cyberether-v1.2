@@ -1,5 +1,11 @@
+#include <cstring>
+
 #include "jetstream/memory/devices/vulkan/buffer.hh"
 #include "jetstream/backend/devices/vulkan/helpers.hh"
+#include "jetstream/memory/devices/vulkan/copy.hh"
+
+#include <cstddef>
+#include <cstring>
 
 #ifdef JETSTREAM_BACKEND_CPU_AVAILABLE
 #include "jetstream/memory/devices/cpu/buffer.hh"
@@ -17,6 +23,14 @@
 namespace Jetstream {
 
 using Implementation = TensorBuffer<Device::Vulkan>;
+
+namespace {
+constexpr VkBufferUsageFlags kDefaultInteropUsage =
+    VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+    VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+}
 
 Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>& storage,
                              const TensorPrototypeMetadata& prototype,
@@ -136,10 +150,19 @@ Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>& storage,
 
         // Null out array.
 
-        JST_CHECK_THROW(Backend::ExecuteOnce(device, queue, fence, commandBuffer, [&](VkCommandBuffer& commandBuffer){
-            vkCmdFillBuffer(commandBuffer, _buffer, 0, VK_WHOLE_SIZE, 0);
-            return Result::SUCCESS;
-        }));
+        if (memoryProperties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+            void* mapped = nullptr;
+            JST_VK_CHECK_THROW(vkMapMemory(device, _memory, 0, memoryAllocateInfo.allocationSize, 0, &mapped), [&]{
+                JST_ERROR("[VULKAN:BUFFER] Failed to map buffer for initialization.");
+            });
+            std::memset(mapped, 0, static_cast<size_t>(memoryAllocateInfo.allocationSize));
+            vkUnmapMemory(device, _memory);
+        } else {
+            JST_CHECK_THROW(Backend::ExecuteOnce(device, queue, fence, commandBuffer, [&](VkCommandBuffer& commandBuffer){
+                vkCmdFillBuffer(commandBuffer, _buffer, 0, VK_WHOLE_SIZE, 0);
+                return Result::SUCCESS;
+            }));
+        }
     }
 
     // Add compatible devices.
@@ -164,28 +187,81 @@ Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>& storage,
 }
 
 #ifdef JETSTREAM_BACKEND_CPU_AVAILABLE
-Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>&,
-                             const TensorPrototypeMetadata&,
-                             const std::shared_ptr<TensorBuffer<Device::CPU>>&) {
-    throw std::runtime_error("Exporting CPU memory to Vulkan not implemented.");
-    // TODO: Add CPU -> Vulkan.
+Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>& storage,
+                             const TensorPrototypeMetadata& prototype,
+                             const std::shared_ptr<TensorBuffer<Device::CPU>>& root_buffer)
+    : TensorBuffer(storage, prototype, true, kDefaultInteropUsage) {
+    JST_TRACE("[VULKAN:BUFFER] Importing CPU buffer.");
+
+    if (!Backend::State<Device::Vulkan>()->isAvailable()) {
+        JST_TRACE("[VULKAN:BUFFER] Vulkan is not available.");
+        JST_CHECK_THROW(Result::ERROR);
+    }
+
+    if (!TensorBuffer<Device::Vulkan>::CanImport(*root_buffer)) {
+        JST_TRACE("[VULKAN:BUFFER] CPU buffer can't be imported.");
+        JST_CHECK_THROW(Result::ERROR);
+    }
+
+    if (prototype.size_bytes == 0 || !root_buffer->allocated()) {
+        return;
+    }
+
+    const auto* srcPtr = static_cast<const std::byte*>(root_buffer->data());
+    JST_CHECK_THROW(Memory::detail::CopyHostToVulkanBuffer(srcPtr + prototype.offset_bytes,
+                                                           prototype.size_bytes,
+                                                           prototype.offset_bytes,
+                                                           _buffer,
+                                                           _memory,
+                                                           host_accessible()));
 }
 
 bool Implementation::CanImport(const TensorBuffer<Device::CPU>&) noexcept {
-    return false;
+    if (!Backend::State<Device::Vulkan>()->isAvailable()) {
+        return false;
+    }
+    return true;
 }
 #endif
 
 #ifdef JETSTREAM_BACKEND_METAL_AVAILABLE
-Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>&,
-                             const TensorPrototypeMetadata&,
-                             const std::shared_ptr<TensorBuffer<Device::Metal>>&) {
-    throw std::runtime_error("Exporting Metal memory to Vulkan not implemented.");
-    // TODO: Add Metal -> Vulkan.
+Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>& storage,
+                             const TensorPrototypeMetadata& prototype,
+                             const std::shared_ptr<TensorBuffer<Device::Metal>>& root_buffer)
+    : TensorBuffer(storage, prototype, true, kDefaultInteropUsage) {
+    JST_TRACE("[VULKAN:BUFFER] Importing Metal buffer.");
+
+    if (!Backend::State<Device::Vulkan>()->isAvailable()) {
+        JST_TRACE("[VULKAN:BUFFER] Vulkan is not available.");
+        JST_CHECK_THROW(Result::ERROR);
+    }
+
+    if (!TensorBuffer<Device::Vulkan>::CanImport(*root_buffer)) {
+        JST_TRACE("[VULKAN:BUFFER] Metal buffer can't be imported.");
+        JST_CHECK_THROW(Result::ERROR);
+    }
+
+    if (prototype.size_bytes == 0 || !root_buffer->allocated()) {
+        return;
+    }
+
+    const auto* srcPtr = static_cast<const std::byte*>(root_buffer->data()->contents());
+    JST_CHECK_THROW(Memory::detail::CopyHostToVulkanBuffer(srcPtr + prototype.offset_bytes,
+                                                           prototype.size_bytes,
+                                                           prototype.offset_bytes,
+                                                           _buffer,
+                                                           _memory,
+                                                           host_accessible()));
 }
 
 bool Implementation::CanImport(const TensorBuffer<Device::Metal>&) noexcept {
-    return false;
+    if (!Backend::State<Device::Vulkan>()->isAvailable()) {
+        return false;
+    }
+    if (!Backend::State<Device::Metal>()->isAvailable()) {
+        return false;
+    }
+    return true;
 }
 #endif
 

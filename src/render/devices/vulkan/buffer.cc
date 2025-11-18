@@ -17,6 +17,7 @@ Result Implementation::create() {
     if (config.enableZeroCopy) {
         buffer = reinterpret_cast<VkBuffer>(config.buffer);
     } else {
+        // TODO(render-device): Surface fine-grained buffer usage controls per target type instead of hardcoding flags.
         // Convert usage flags.
 
         VkBufferUsageFlags bufferUsageFlag = 0;

@@ -141,14 +141,41 @@ Result Duplicate<D, T>::createCompute(const Context& ctx) {
 
 template<Device D, typename T>
 Result Duplicate<D, T>::compute(const Context& ctx) {
-    if (input.buffer.contiguous()) {
-        JST_CHECK(Memory::Copy(output.buffer, input.buffer, ctx.cuda->stream()));
-    } else {
-        JST_CHECK(ctx.cuda->launchKernel("duplicate", 
-                                         pimpl->grid, 
-                                         pimpl->block, 
-                                         pimpl->arguments.data()));
+    const bool contiguousCopy = input.buffer.contiguous() && output.buffer.contiguous();
+
+    if (contiguousCopy) {
+        const auto copyResult = Memory::Copy(output.buffer, input.buffer, ctx.cuda->stream());
+        if (copyResult == Result::SUCCESS) {
+            return Result::SUCCESS;
+        }
     }
+
+    auto refreshMeta = [](auto& meta, const auto& tensor) {
+        meta = {
+            reinterpret_cast<uint8_t*>(tensor.data()) + tensor.offset_bytes(),
+            tensor.rank(),
+            {},
+            {},
+        };
+
+        for (U64 i = 0; i < tensor.rank(); i++) {
+            meta.shape[i] = tensor.shape()[i];
+            meta.strides[i] = tensor.stride()[i];
+        }
+    };
+
+    refreshMeta(pimpl->inputMeta, input.buffer);
+    refreshMeta(pimpl->outputMeta, output.buffer);
+
+    pimpl->size = input.buffer.size();
+
+    const U64 threadsPerBlock = pimpl->block[0];
+    pimpl->grid[0] = (pimpl->size + threadsPerBlock - 1) / threadsPerBlock;
+
+    JST_CHECK(ctx.cuda->launchKernel("duplicate",
+                                     pimpl->grid,
+                                     pimpl->block,
+                                     pimpl->arguments.data()));
 
     return Result::SUCCESS;
 }

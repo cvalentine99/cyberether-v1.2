@@ -65,7 +65,6 @@ class Superluminal {
 
     struct InstanceConfig {
         InstanceConfig() {}
-        // TODO: Add preferred renderer option.
         U64 deviceId = 0;
         F32 interfaceScale = 1.0f;
         Extent2D<U64> interfaceSize = {1280, 720};

@@ -17,6 +17,14 @@
 | `src/modules/audio/generic.cc` | 67 | "Implement GUID to string conversion" | ✅ RESOLVED | 353f173 |
 | `src/instance.cc` | 173 | "Improve error messages" | ✅ RESOLVED | 0ec4e67 |
 | `include/jetstream/instance.hh` | 208 | "Maybe add module->destroy()" | ✅ RESOLVED | 0ec4e67 |
+| `src/modules/agc/cpu/base.cc` | 24 | "This is a dog shit implementation. Improve." | ✅ RESOLVED | PENDING |
+| `src/modules/waterfall/generic.cc` | 218 | "Fix this horrible thing" | ✅ RESOLVED | PENDING |
+| `src/memory/prototype.cc` | 109 | "Implement permutation" | ✅ RESOLVED | PENDING |
+| `src/memory/prototype.cc` | 121 | "Reshape for non-contiguous tensors" | ✅ RESOLVED | PENDING |
+| `include/jetstream/memory/devices/vulkan/copy.hh` | 6 | "Add Vulkan copy method" | ✅ RESOLVED | PENDING |
+| `src/render/devices/vulkan/texture.cc` | 225 | "Implement zero-copy option" | ✅ RESOLVED | PENDING |
+| `src/platform/base.cc` | 295 | "Implement folder picker for browsers" | ✅ RESOLVED | PENDING |
+| `README.md` | 272 | "Update documentation on remote system" | ✅ RESOLVED | PENDING |
 | `src/render/components/text.cc` | 423 | "Find better way to normalize glyph offsets" | ✅ RESOLVED | 0ec4e67 |
 | `src/compute/graph/cuda/base.cc` | 146 | "Header loading" | ✅ RESOLVED | 7886884 |
 | `src/modules/arithmetic/cuda/base.cc` | 56 | "Implement global stride handler" | ✅ RESOLVED | f883c5d |
@@ -39,7 +47,7 @@
 | `src/modules/audio/generic.cc` | 274 | "Support for more channels" | ✅ RESOLVED | 229658e |
 | `src/superluminal/base.cc` | 704 | "The Multiply block doesn't support CUDA yet. This is a temporary bypass." | ✅ RESOLVED | 8bbdaf0 |
 
-**Total Resolved This Session:** 28 TODOs (21 core + 5 editor improvements + 1 multi-channel audio + CUDA multiply)
+**Total Resolved This Session:** 36 TODOs (28 previous + 8 new: 2 critical fixes + 4 memory/backend + 2 platform/docs)
 
 ---
 
@@ -47,12 +55,9 @@
 
 ### Crash/Stability Issues
 
-| File | Line | TODO | Impact |
-|------|------|------|--------|
-| `src/modules/waterfall/generic.cc` | 218 | "Fix this horrible thing" | Code Quality - Potential instability |
-| `src/modules/agc/cpu/base.cc` | 24 | "This is a dog shit implementation. Improve." | Performance - Poor implementation acknowledged |
+~~All critical TODOs have been resolved!~~
 
-**Status:** 2 critical issues remaining
+**Status:** 0 critical issues remaining ✅
 
 ---
 
@@ -62,10 +67,10 @@ These are explicitly tagged for Beta 1 completion:
 
 | File | Line | TODO | Priority |
 |------|------|------|----------|
-| `README.md` | 272 | "Update documentation on remote system" | HIGH |
+| `README.md` | 272 | "Update documentation on remote system" | ✅ RESOLVED |
 | `include/jetstream/viewport/adapters/generic.hh` | 33 | "Implement auto-join functionality" | HIGH |
 
-**Status:** 2 Beta 1 blockers
+**Status:** 1 Beta 1 blocker remaining (down from 2)
 
 ---
 
@@ -81,7 +86,7 @@ All block description and editor documentation items have been addressed. Future
 
 | File | Line | Description | Priority |
 |------|------|-------------|----------|
-| `src/modules/agc/cpu/base.cc` | 24 | Rewrite poor AGC implementation | 🔴 CRITICAL |
+| `src/modules/agc/cpu/base.cc` | 24 | ~~Rewrite poor AGC implementation~~ | ✅ RESOLVED |
 | `src/modules/lineplot/metal/base.cc` | 5 | Improve performance | HIGH |
 | `src/modules/lineplot/metal/base.cc` | 20 | Use shared memory optimization | HIGH |
 | `src/modules/arithmetic/cuda/base.cc` | 56-58 | Improve naive implementation (add remaining ops) | MEDIUM |
@@ -104,7 +109,7 @@ All block description and editor documentation items have been addressed. Future
 - `meson/loaders/soapy/meson.build:38` - Implement SoapySDR
 
 **Browser Support (2 TODOs):**
-- `src/platform/base.cc:295` - Implement folder picker
+- ~~`src/platform/base.cc:295` - Implement folder picker~~ ✅ RESOLVED
 - `meson/loaders/soapy/meson.build:33` - Fix libusb build on Emscripten
 
 ---
@@ -118,8 +123,8 @@ All block description and editor documentation items have been addressed. Future
 - `src/superluminal/base.cc:790` - Add Slice block for channel index
 
 **Memory/Tensor Operations:**
-- `src/memory/prototype.cc:109` - Implement permutation
-- `src/memory/prototype.cc:121` - Reshape for non-contiguous tensors
+- ~~`src/memory/prototype.cc:109` - Implement permutation~~ ✅ RESOLVED
+- ~~`src/memory/prototype.cc:121` - Reshape for non-contiguous tensors~~ ✅ RESOLVED
 - `src/compute/scheduler.cc:20` - Auto-add copy module
 - `src/compute/scheduler.cc:582` - Implement copy module
 - `src/modules/audio/generic.cc:341` - Standalone resampler module
@@ -172,7 +177,7 @@ All block description and editor documentation items have been addressed. Future
 - `src/memory/vulkan/buffer.cc:171` - Add CPU → Vulkan
 - `src/memory/vulkan/buffer.cc:184` - Add Metal → Vulkan
 - `src/memory/metal/buffer.cc:171` - Add Vulkan → Metal
-- `include/jetstream/memory/devices/vulkan/copy.hh:6` - Add Vulkan copy method
+- ~~`include/jetstream/memory/devices/vulkan/copy.hh:6` - Add Vulkan copy method~~ ✅ RESOLVED
 
 **Power/Thermal Monitoring (6 TODOs):**
 - `src/backend/devices/vulkan/base.cc:347` - Wire thermal state implementation
@@ -190,7 +195,7 @@ All block description and editor documentation items have been addressed. Future
 **Rendering (5 TODOs):**
 - `src/render/devices/metal/texture.cc:24` - Check memoryless option
 - `src/render/devices/vulkan/texture.cc:38` - Review texture settings
-- `src/render/devices/vulkan/texture.cc:225` - Zero-copy option
+- ~~`src/render/devices/vulkan/texture.cc:225` - Zero-copy option~~ ✅ RESOLVED
 - `src/render/devices/metal/kernel.cc:87` - 2D/3D grid sizes
 - `src/render/devices/metal/buffer.cc:13` - Add usage hints
 
@@ -254,13 +259,13 @@ These are in vendored libraries and should generally not be modified:
 
 ### Overall Statistics
 - **Starting TODOs:** 161 (core codebase only)
-- **Resolved This Session:** 5
-- **Current TODOs:** ~156
-- **Completion Rate:** 3.1%
+- **Resolved This Session:** 36
+- **Current TODOs:** ~125
+- **Completion Rate:** 22.4%
 
 ### By Priority
-- 🔴 **Critical:** 3 remaining
-- 🟡 **Beta 1 Blockers:** 2 remaining
+- 🔴 **Critical:** 0 remaining ✅
+- 🟡 **Beta 1 Blockers:** 1 remaining
 - 🟢 **High Priority:** ~15
 - 🔵 **Medium Priority:** ~40
 - ⚪ **Low Priority:** ~96
@@ -272,13 +277,13 @@ These are in vendored libraries and should generally not be modified:
 ### Immediate (Critical)
 1. ✅ ~~Fix Slice block crash~~ (COMPLETED)
 2. ✅ ~~Fix remote viewport crash~~ (COMPLETED)
-3. **Rewrite AGC implementation** - Currently acknowledged as very poor
-4. **Fix waterfall logic** - Flagged as "horrible thing"
-5. **Implement CUDA support for Multiply block** - Currently bypassed
+3. ✅ ~~Rewrite AGC implementation~~ (COMPLETED)
+4. ✅ ~~Fix waterfall logic~~ (COMPLETED)
+5. ✅ ~~Implement CUDA support for Multiply block~~ (COMPLETED)
 
 ### Beta 1 Completion
-1. **Implement auto-join functionality** (viewport adapters)
-2. **Update remote system documentation**
+1. **Implement auto-join functionality** (viewport adapters) - IN PROGRESS (tests added)
+2. ✅ ~~Update remote system documentation~~ (COMPLETED)
 
 ### High Value / High Impact
 1. **Backend refactoring** - Large architectural improvement needed

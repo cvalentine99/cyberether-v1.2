@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <codecvt>
+#include <cmath>
 #include <cstring>
 #include <locale>
 #include <numeric>
@@ -291,12 +292,33 @@ Result Audio<D, T>::create() {
 
     // Allocate output.
 
-    const U64 outputSize = input.buffer.size() * (config.outSampleRate / config.inSampleRate);
-    output.buffer = Tensor<D, T>({outputSize});
+    if (config.channels == 0) {
+        JST_ERROR("Audio module requires at least one channel.");
+        return Result::ERROR;
+    }
+
+    const U64 inputSamples = input.buffer.size();
+    if (inputSamples == 0) {
+        JST_ERROR("Input buffer is empty. Configure the audio block with sample data.");
+        return Result::ERROR;
+    }
+
+    if (inputSamples % config.channels != 0) {
+        JST_ERROR("Input buffer size ({}) is not divisible by the configured channel count ({}).",
+                  inputSamples, config.channels);
+        return Result::ERROR;
+    }
+
+    const U64 framesPerBuffer = inputSamples / config.channels;
+    const F64 resampleRatio = config.outSampleRate / config.inSampleRate;
+    const U64 outputFrames = static_cast<U64>(std::ceil(framesPerBuffer * resampleRatio));
+
+    output.buffer = Tensor<D, T>({config.channels, outputFrames});
 
     // Initialize circular buffer.
 
-    pimpl->buffer.resize(input.buffer.shape()[1]*20);
+    const U64 queueSamples = std::max<U64>(framesPerBuffer * config.channels * 20, config.channels * 64ULL);
+    pimpl->buffer.resize(queueSamples);
 
     return Result::SUCCESS;
 }
@@ -323,8 +345,15 @@ template<Device D, typename T>
 void Audio<D, T>::Impl::callback(ma_device* pDevice, void* pOutput, const void*, ma_uint32 frameCount) {
     auto* audio = reinterpret_cast<Audio<D, T>::Impl*>(pDevice->pUserData);
 
-    if (frameCount < audio->buffer.getOccupancy()) {
-        audio->buffer.get(reinterpret_cast<F32*>(pOutput), frameCount);
+    const U64 requestedSamples = static_cast<U64>(frameCount) * audio->deviceConfig.playback.channels;
+    if (requestedSamples == 0) {
+        return;
+    }
+
+    if (requestedSamples <= audio->buffer.getOccupancy()) {
+        audio->buffer.get(reinterpret_cast<F32*>(pOutput), requestedSamples);
+    } else {
+        std::memset(pOutput, 0, requestedSamples * sizeof(F32));
     }
 }
 
@@ -336,19 +365,34 @@ Result Audio<D, T>::createCompute(const Context&) {
 
 template<Device D, typename T>
 Result Audio<D, T>::compute(const Context&) {
-    ma_uint64 frameCountIn  = input.buffer.size();
-    ma_uint64 frameCountOut = output.buffer.size();
+    if (config.channels == 0) {
+        JST_ERROR("Audio module requires at least one channel.");
+        return Result::ERROR;
+    }
+
+    if (input.buffer.size() % config.channels != 0 || output.buffer.size() % config.channels != 0) {
+        JST_ERROR("Audio buffers must contain an integer number of frames per channel.");
+        return Result::ERROR;
+    }
+
+    ma_uint64 frameCountIn  = input.buffer.size() / config.channels;
+    ma_uint64 frameCountOut = output.buffer.size() / config.channels;
 
     // TODO: Create standalone resampler module.
-    ma_result result = ma_resampler_process_pcm_frames(&pimpl->resamplerCtx, input.buffer.data(), &frameCountIn, output.buffer.data(), &frameCountOut);
+    ma_result result = ma_resampler_process_pcm_frames(&pimpl->resamplerCtx,
+                                                       input.buffer.data(),
+                                                       &frameCountIn,
+                                                       output.buffer.data(),
+                                                       &frameCountOut);
     if (result != MA_SUCCESS) {
         JST_ERROR("Failed to resample signal.");
         return Result::ERROR;
     }
 
-    JST_ASSERT(frameCountOut == output.buffer.size(), "Frame count mismatch.");
+    const U64 producedSamples = frameCountOut * config.channels;
+    JST_ASSERT(producedSamples <= output.buffer.size(), "Frame count mismatch.");
 
-    pimpl->buffer.put(output.buffer.data(), frameCountOut);
+    JST_CHECK(pimpl->buffer.put(output.buffer.data(), producedSamples));
 
     return Result::SUCCESS;
 }

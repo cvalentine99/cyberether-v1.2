@@ -235,17 +235,19 @@ The graphical interface of CyberEther can be launched from the terminal by runni
 $ ./cyberether --help
 Usage: ./cyberether [options] [flowgraph]
 Options:
-  --headless              Enable headless mode.
-  --endpoint [endpoint]   Set the endpoint of the headless viewport (`1.1.1.1:8000`, `./vid.mp4`, etc). Default: `/tmp/cyberether`
+  --remote                Enable the remote/headless viewport pipeline.
+  --broker [url]          Override the remote broker (`https://api.cyberether.org` by default).
+  --auto-join             Automatically approve every pending remote session (insecure).
   --backend [backend]     Set the preferred backend (`Metal`, `Vulkan`, or `WebGPU`).
-  --framerate [value]     Set the framerate of the headless viewport (FPS). Default: `60`
-  --codec [codec]         Set the video codec of the headless viewport. Default: `FFV1`
+  --framerate [value]     Set the viewport framerate (FPS). Default: `60`
+  --multisampling [value] Set the multisampling anti-aliasing factor (`1`, `4`, or `8`). Default: `4`
+  --codec [codec]         Set the video codec of the viewport. Default: `H264`
   --size [width] [height] Set the initial size of the viewport. Default: `1920 1080`
   --scale [scale]         Set the scale of the render window. Default: `1.0`
-  --benchmark [type]      Run the benchmark and output the results (`markdown`, `json`, or `csv`). Default: `markdown`
+  --benchmark [type]      Run the benchmark and output the results (`markdown`, `json`, `csv`, or `quiet`). Default: `markdown`
   --no-hw-acceleration    Disable hardware acceleration. Enabled otherwise.
 Other Options:
-  --staging-buffer [size] Set the staging buffer size (MB). Default: `32`
+  --staging-buffer [size] Set the staging buffer size (MB). Default: `64`
   --device-id [id]        Set the physical device ID. Default: `0`
   --no-validation         Disable Vulkan validation layers. Enabled otherwise.
   --no-vsync              Disable vsync. Enabled otherwise.
@@ -260,20 +262,23 @@ The graphical interface is where the fun is! It is a fully-featured application 
 ![Flowgraph](docs/cyberether-flowgraph.png)
 
 ### Remote Interface
-CyberEther can be used as a remote interface for headless servers and edge devices. The remote interface is a low-latency interface that allows the user to control the flowgraph remotely. The remote interface is built on top of [gstreamer](https://gstreamer.freedesktop.org) and uses UDP and TCP for communication. Other than video, the remote interface also sends keyboard and mouse events to the server. The example flowgraph `Remote Instance` (see image below) is available by default in the graphical interface and is a good example of how to use the remote interface.
+CyberEther can be used as a remote interface for headless servers and edge devices. The remote interface is a low-latency streaming pipeline built on top of [GStreamer](https://gstreamer.freedesktop.org) and WebRTC that allows you to view and control a flowgraph from another device. Alongside the framebuffer stream the broker forwards keyboard, mouse, and scroll events back to the server. The example flowgraph `Remote Instance` (see image below) is available by default in the graphical interface and is a good reference for integrating the remote block in your own projects.
 
 ![Remote Instance](docs/remote-instance.png)
 
-At this time, software video encoding will be used on most platforms. Work is being done to enable hardware encoding in more devices, but this requires a lot of experimentation. Exceptions to this are NVIDIA GPUs, which will use the NVENC hardware encoder with a zero-copy framebuffer encoding, making it very nice and efficient. The Raspberry Pi will also use hardware encoding by default.
+#### Hosting a remote session
+1. Launch the headless pipeline with `./cyberether --remote --codec h264` (add `--broker https://your-broker` if you self-host the broker, and `--size WIDTH HEIGHT` for a custom framebuffer). Hardware encoding is automatically selected when NVENC or V4L2 accelerators are available; otherwise a software encoder is used.
+2. The terminal UI will open a dashboard that displays a QR code, an invitation link (`https://…/remote#<token>`), and the current room metadata. Share that link with the device that should control the flowgraph.
+3. When the remote device opens the link it will display a 6-digit authorization code. Type that code in the "Add New Client" panel to approve the session. You can pass `--auto-join` when launching the server to automatically approve every incoming request (useful for labs, but insecure for exposed hosts).
+4. Connected clients appear in the `Clients` panel. Their input events are injected into the local ImGui context so you can fully interact with the flowgraph from the browser.
 
-To initialize a remote instance of CyberEther, run the command below on the server. If you want lossless video, use the `--codec ffv1` option instead. The lossless video will use quite a lot of bandwidth, so make sure you have a good connection.
+#### Troubleshooting and tips
+* The broker runs over HTTPS. Make sure the server has outbound connectivity and an accurate system clock so TLS validation succeeds. Use `--broker` to point at a staging or self-hosted broker when testing on closed networks.
+* If you see `[REMOTE] Gstreamer plugin 'rswebrtc' is not available` or similar errors, install the GStreamer "good", "bad", and WebRTC plugins provided by your distribution. Falling back to `--no-hw-acceleration` can also help when hardware encoders are missing.
+* Video quality is controlled by `--codec` and `--framerate`. Lossless `--codec ffv1` requires substantially more bandwidth than the default `h264` stream.
+* Firewall rules must allow the broker control port plus the subsequent media port (e.g., TCP 5002 for telemetry and UDP 5003 for video when using the legacy endpoint receiver described in [docs/remote-headless-mode.md](./docs/remote-headless-mode.md)). The broker dashboard also lists the invite URL so you can quickly verify which ports are in use.
 
-```bash
-// TODO: [beta1] Update documentation on remote system.
-$ ./cyberether --headless --endpoint 0.0.0.0:5002 --codec h264
-```
-
-Note: This block will use two ports, the first one is shown in the block below (TCP:5002) for telemetry, and control and the second one (UDP:5003) for data streaming. Fun fact, you can use gstreamer to receive the video stream. Detailed instructions on how to do this can be found [here](./docs/remote-headless-mode.md).
+For advanced setups the legacy gstreamer-only examples in [docs/remote-headless-mode.md](./docs/remote-headless-mode.md) are still available, and the `Remote Instance` flowgraph remains a handy sandbox to validate the remote pipeline end-to-end.
 
 ### Benchmark Tool
 CyberEther comes with a neat runtime benchmark tool that can be used to compare the performance of different backends and modules. There are two ways to use it, either through the graphical interface or by running the command line tool. The graphical interface is the easiest way to use it. To access it, click on the `Developer` menu and then click on `Open Benchmarking Tool`. A new window will open (see image below) and the benchmark can be started by clicking on the `Run Benchmark` button. The results will be displayed in a table.
