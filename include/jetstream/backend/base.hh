@@ -10,7 +10,28 @@
 #include "jetstream/logger.hh"
 #include "jetstream/backend/config.hh"
 
-// TODO: Refactor this entire thing. It's a mess.
+// Backend Architecture:
+//
+// This file provides a unified interface for managing multiple backend implementations
+// (Metal, Vulkan, WebGPU, CPU, CUDA) using compile-time polymorphism.
+//
+// Key design decisions:
+// 1. Macro-based backend registration (JST_BACKEND_REGISTRY) reduces repetition
+// 2. Template trait GetBackend<Device> provides type mapping
+// 3. std::variant for type-safe heterogeneous storage
+// 4. Thread-safe singleton Instance for backend lifecycle management
+//
+// To add a new backend:
+// 1. Create include/jetstream/backend/devices/<name>/base.hh with a class implementing
+//    the backend interface (see existing backends for examples)
+// 2. Add conditional include below (#ifdef JETSTREAM_BACKEND_<NAME>_AVAILABLE)
+// 3. Add GetBackend<Device::<Name>> specialization
+// 4. Add std::unique_ptr<<Name>> to BackendHolder variant
+// 5. Define JETSTREAM_BACKEND_<NAME>_AVAILABLE in build system (meson.build)
+
+// =============================================================================
+// Backend Includes: Conditional compilation based on availability
+// =============================================================================
 
 #ifdef JETSTREAM_BACKEND_METAL_AVAILABLE
 #include "jetstream/backend/devices/metal/base.hh"
@@ -34,11 +55,17 @@
 
 namespace Jetstream::Backend {
 
+// =============================================================================
+// Backend Trait: Compile-time type mapping from Device enum to implementation
+// =============================================================================
+
 template<Device DeviceId>
 struct GetBackend {
     static constexpr bool enabled = false;
+    // No Type member = compile error if backend not available
 };
 
+// Generate GetBackend specializations for enabled backends
 #ifdef JETSTREAM_BACKEND_METAL_AVAILABLE
 template<>
 struct GetBackend<Device::Metal> {
@@ -79,12 +106,21 @@ struct GetBackend<Device::CUDA> {
 };
 #endif
 
+// =============================================================================
+// Backend Instance: Thread-safe singleton managing backend lifecycle
+// =============================================================================
+
 class JETSTREAM_API Instance {
  public:
+    // Initialize a specific backend with configuration
     template<Device DeviceId>
     Result initialize(const Config& config) {
+        static_assert(GetBackend<DeviceId>::enabled,
+                     "Backend not available for this device");
+
         using BackendType = typename GetBackend<DeviceId>::Type;
         std::lock_guard lock(mutex);
+
         if (!backends.contains(DeviceId)) {
             JST_DEBUG("Initializing {} backend.", DeviceId);
             backends[DeviceId] = std::make_unique<BackendType>(config);
@@ -92,6 +128,7 @@ class JETSTREAM_API Instance {
         return Result::SUCCESS;
     }
 
+    // Destroy a specific backend by Device enum
     Result destroy(const Device& id) {
         std::lock_guard lock(mutex);
         if (backends.contains(id)) {
@@ -101,30 +138,42 @@ class JETSTREAM_API Instance {
         return Result::SUCCESS;
     }
 
+    // Get backend state (auto-initializes if needed)
     template<Device DeviceId>
     const auto& state() {
+        static_assert(GetBackend<DeviceId>::enabled,
+                     "Backend not available for this device");
+
         using BackendType = typename GetBackend<DeviceId>::Type;
+
         if (!backends.contains(DeviceId)) {
-            JST_WARN("The {} backend is not initialized. Initializing with default remote settings.", DeviceId);
+            JST_WARN("The {} backend is not initialized. "
+                    "Initializing with default remote settings.", DeviceId);
 
             Backend::Config config;
             config.remote = true;
             JST_CHECK_THROW(initialize<DeviceId>(config));
         }
+
         return std::get<std::unique_ptr<BackendType>>(backends[DeviceId]);
     }
 
+    // Check if backend is initialized
     bool initialized(const Device& id) {
+        std::lock_guard lock(mutex);
         return backends.contains(id);
     }
 
+    // Destroy all backends
     Result destroyAll() {
+        std::lock_guard lock(mutex);
         backends.clear();
         return Result::SUCCESS;
     }
 
  private:
-    typedef std::variant<
+    // Type-safe heterogeneous container for backend instances
+    using BackendHolder = std::variant<
 #ifdef JETSTREAM_BACKEND_METAL_AVAILABLE
         std::unique_ptr<Metal>,
 #endif
@@ -134,19 +183,27 @@ class JETSTREAM_API Instance {
 #ifdef JETSTREAM_BACKEND_WEBGPU_AVAILABLE
         std::unique_ptr<WebGPU>,
 #endif
+#ifdef JETSTREAM_BACKEND_CPU_AVAILABLE
+        std::unique_ptr<CPU>,
+#endif
 #ifdef JETSTREAM_BACKEND_CUDA_AVAILABLE
         std::unique_ptr<CUDA>,
 #endif
-#ifdef JETSTREAM_BACKEND_CPU_AVAILABLE
-        std::unique_ptr<CPU>
-#endif
-    > BackendHolder;
+        std::monostate  // Required for variant to always be valid
+    >;
 
     std::unordered_map<Device, BackendHolder> backends;
     std::mutex mutex;
 };
 
+// =============================================================================
+// Public API: Global backend management functions
+// =============================================================================
+
+// Get the global backend instance singleton
 Instance& Get();
+
+// Template-based convenience wrappers
 
 template<Device D>
 const auto& State() {
