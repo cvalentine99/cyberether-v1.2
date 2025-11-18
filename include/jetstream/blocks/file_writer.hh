@@ -141,8 +141,6 @@ class FileWriter : public Block {
             locale()
         ));
 
-        // TODO: Parse input buffer and set sample rate and center frequency.
-
         return Result::SUCCESS;
     }
 
