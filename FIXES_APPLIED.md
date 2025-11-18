@@ -8,9 +8,9 @@ This document tracks all fixes and improvements applied during the current devel
 
 **Date:** November 18, 2025
 **Branch:** main
-**Commits Made:** 11
-**Files Modified:** 52
-**TODOs Resolved:** 46
+**Commits Made:** 12 (including 1 doc update)
+**Files Modified:** 53
+**TODOs Resolved:** 47
 **Status:** ✅ All changes compiled and committed successfully
 
 ---
@@ -316,6 +316,37 @@ This document tracks all fixes and improvements applied during the current devel
 
 ---
 
+### 11. Add Usage Hints to Metal Buffers
+**Commit:** `f7fc627`
+**Files Changed:** 1 file, 17 insertions(+), 2 deletions(-)
+
+#### Metal Buffer Resource Options (`src/render/devices/metal/buffer.cc`)
+**Problem:**
+- TODO at line 13 noted missing usage hints for buffer creation
+- All buffers used fixed `ResourceStorageModeShared` without optimization
+- No consideration for buffer usage patterns (frequent CPU updates vs GPU-only)
+- Suboptimal performance for vertex/index/uniform buffers updated each frame
+
+**Solution:**
+- Set appropriate resource options based on `config.target` buffer type
+- Use `ResourceCPUCacheModeWriteCombined` for frequently updated buffers:
+  - VERTEX, VERTEX_INDICES, UNIFORM, UNIFORM_DYNAMIC
+- Keep default cache mode for STORAGE buffers to allow efficient CPU readback
+- Added comprehensive comments explaining resource option choices
+
+**Technical Details:**
+- Write-combined cache mode prevents CPU cache pollution from write-only buffers
+- Improves memory bandwidth for buffers updated from CPU each frame
+- Follows Metal API best practices for buffer resource management
+- Similar pattern to Vulkan's buffer usage flags
+
+**Files Modified:**
+- `src/render/devices/metal/buffer.cc` (lines 13, 20-38)
+
+**Impact:** ✅ Improved Metal buffer performance for frequently updated data, follows API best practices
+
+---
+
 ## TODOs Resolved in This Session
 
 | Location | Original TODO | Status |
@@ -334,8 +365,9 @@ This document tracks all fixes and improvements applied during the current devel
 | `src/modules/multiply_constant/generic.cc:19` | "Add custom formater for complex type" | ✅ FIXED - Added fmt/std.h (`445f89b`) |
 | `src/render/window.cc:218` | "Replace with value from implementation" | ✅ FIXED - Named constant (`f2eb975`) |
 | `src/backend/devices/metal/base.cc:14` | "Respect config.deviceId" | ✅ FIXED - Device selection (`6a541d5`) |
+| `src/render/devices/metal/buffer.cc:13` | "Add usage hints" | ✅ FIXED - Resource options (`f7fc627`) |
 
-**Total TODOs Resolved:** 46 (5 critical fixes + 33 documentation + 3 cleanup + 2 CUDA infrastructure + 3 low-impact tasks)
+**Total TODOs Resolved:** 47 (5 critical fixes + 33 documentation + 3 cleanup + 2 CUDA infrastructure + 4 low-impact tasks)
 
 ---
 
