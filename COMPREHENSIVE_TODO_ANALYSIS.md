@@ -2,7 +2,7 @@
 
 **Generated:** November 18, 2025
 **Status:** Active Development - Beta 1 Phase
-**Total TODOs (excluding third-party):** ~153 remaining (down from 161)
+**Total TODOs (excluding third-party):** ~152 remaining (down from 161)
 
 ---
 
@@ -18,8 +18,9 @@
 | `src/instance.cc` | 173 | "Improve error messages" | ✅ RESOLVED | 0ec4e67 |
 | `include/jetstream/instance.hh` | 208 | "Maybe add module->destroy()" | ✅ RESOLVED | 0ec4e67 |
 | `src/render/components/text.cc` | 423 | "Find better way to normalize glyph offsets" | ✅ RESOLVED | 0ec4e67 |
+| `src/compute/graph/cuda/base.cc` | 146 | "Header loading" | ✅ RESOLVED | 7886884 |
 
-**Total Resolved This Session:** 8 TODOs
+**Total Resolved This Session:** 9 TODOs
 
 ---
 
@@ -125,7 +126,6 @@ Files affected (all `include/jetstream/blocks/*.hh`):
 - `include/jetstream/modules/multiply.hh:75` - Metal specific
 
 **Other Implementations:**
-- `src/compute/graph/cuda/base.cc:146` - Header loading
 - `python/superluminal/_module/__init__.py:107` - Python bindings
 - `tests/memory.cc:6` - Use Catch2 for unit tests
 - `tests/memory/storage.cc:21` - Add more tests

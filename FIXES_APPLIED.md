@@ -8,9 +8,9 @@ This document tracks all fixes and improvements applied during the current devel
 
 **Date:** November 18, 2025
 **Branch:** main
-**Commits Made:** 4
-**Files Modified:** 41
-**TODOs Resolved:** 41
+**Commits Made:** 5
+**Files Modified:** 43
+**TODOs Resolved:** 42
 **Status:** ✅ All changes committed and compiled locally (ccache disabled due to tmp perms)
 
 ---
@@ -169,6 +169,29 @@ This document tracks all fixes and improvements applied during the current devel
 
 ---
 
+### 6. Enable NVRTC Headers for CUDA Kernels
+**Commit:** `7886884`
+**Files Changed:** 2 files, 97 insertions(+), 12 deletions(-)
+
+#### NVRTC Header Loading (`src/compute/graph/cuda/base.cc`)
+**Problem:**
+- TODO noted that NVRTC kernels ignored the `KernelHeader` list, so shared helper code couldn't be injected
+
+**Solution:**
+- Added embedded header definitions (starting with `jetstream_complex.cuh`) and load them through NVRTC
+- Deduplicated header requests per kernel and warned when unknown enums are passed
+
+#### Amplitude Kernel Reuse (`src/modules/amplitude/cuda/base.cc`)
+**Problem:**
+- Complex amplitude kernel duplicated magnitude math inline; nothing verified header support
+
+**Solution:**
+- Included the shared complex header and reused `jst_complex_abs` instead of hand-written math
+
+**Impact:** ✅ CUDA kernels can now share helper code without copy/pasting snippets
+
+---
+
 ## TODOs Resolved in This Session
 
 | Location | Original TODO | Status |
@@ -182,8 +205,9 @@ This document tracks all fixes and improvements applied during the current devel
 | `src/instance.cc:173` | "Improve error messages" | ✅ FIXED - Added detailed validation (`0ec4e67`) |
 | `include/jetstream/instance.hh:214` | "Maybe add module->destroy()" | ✅ FIXED - Destroy incomplete module (`0ec4e67`) |
 | `src/render/components/text.cc:423` | "Find better way to normalize glyph offsets" | ✅ FIXED - Single-pass glyph placement (`0ec4e67`) |
+| `src/compute/graph/cuda/base.cc:146` | "Header loading" | ✅ FIXED - NVRTC now injects headers (`7886884`) |
 
-**Total TODOs Resolved:** 41 (5 critical fixes + 33 documentation + 3 cleanup)
+**Total TODOs Resolved:** 42 (5 critical fixes + 33 documentation + 3 cleanup + 1 CUDA infrastructure)
 
 ---
 
@@ -217,7 +241,7 @@ Working tree: clean
 - ✅ Code review: Changes follow project patterns
 - ✅ Merge conflict resolution: Validated improved version chosen
 - ✅ Crash fixes: Addressed root causes, not just symptoms
-- ✅ Cleanup commit rebuilt with `CCACHE_DISABLE=1 meson compile -C build`
+- ✅ Latest commits rebuilt with `CCACHE_DISABLE=1 meson compile -C build`
 
 ---
 
