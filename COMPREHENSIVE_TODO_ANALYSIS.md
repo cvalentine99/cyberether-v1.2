@@ -2,7 +2,7 @@
 
 **Generated:** November 18, 2025
 **Status:** Active Development - Beta 1 Phase
-**Total TODOs (excluding third-party):** ~113 remaining (down from 161)
+**Total TODOs (excluding third-party):** ~112 remaining (down from 161)
 
 ---
 
@@ -36,8 +36,10 @@
 | `include/jetstream/blocks/file_writer.hh` | 99 | "Parse input buffer for sample rate/center freq" | ✅ RESOLVED | 1f3e141 |
 | `include/jetstream/blocks/spectroscope.hh` | 344 | "Add support for zoom and translation" | ✅ RESOLVED | 1f3e141 |
 | `include/jetstream/blocks/waterfall.hh` | 124 | "Upgrade zoom/panning API" | ✅ RESOLVED | 1f3e141 |
+| `src/modules/audio/generic.cc` | 274 | "Support for more channels" | ✅ RESOLVED | 229658e |
+| `src/superluminal/base.cc` | 704 | "The Multiply block doesn't support CUDA yet. This is a temporary bypass." | ✅ RESOLVED | 8bbdaf0 |
 
-**Total Resolved This Session:** 26 TODOs (previous 21 + 5 editor improvements)
+**Total Resolved This Session:** 28 TODOs (21 core + 5 editor improvements + 1 multi-channel audio + CUDA multiply)
 
 ---
 
@@ -49,9 +51,8 @@
 |------|------|------|--------|
 | `src/modules/waterfall/generic.cc` | 218 | "Fix this horrible thing" | Code Quality - Potential instability |
 | `src/modules/agc/cpu/base.cc` | 24 | "This is a dog shit implementation. Improve." | Performance - Poor implementation acknowledged |
-| `src/superluminal/base.cc` | 704 | "The Multiply block doesn't support CUDA yet. This is a temporary bypass." | Feature Gap - CUDA support missing |
 
-**Status:** 3 critical issues remaining
+**Status:** 2 critical issues remaining
 
 ---
 

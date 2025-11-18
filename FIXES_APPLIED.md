@@ -8,9 +8,9 @@ This document tracks all fixes and improvements applied during the current devel
 
 **Date:** November 18, 2025
 **Branch:** main
-**Commits Made:** 14 (including 2 doc updates)
-**Files Modified:** 57
-**TODOs Resolved:** 51
+**Commits Made:** 17 (including 3 doc updates)
+**Files Modified:** 65
+**TODOs Resolved:** 55
 **Status:** ✅ All changes compiled and committed successfully
 
 ---
@@ -274,6 +274,29 @@ This document tracks all fixes and improvements applied during the current devel
 
 ---
 
+### 10. Add CUDA Backend for Multiply + Restore Complex Conversion Graph
+**Commit:** `8bbdaf0`
+**Files Changed:** 5 files, 223 insertions(+), 28 deletions(-)
+
+#### Multiply Kernel for CUDA (`src/modules/multiply/cuda/*`, `include/jetstream/modules/multiply.hh`, `src/modules/multiply/meson.build`)
+**Problem:**
+- Superluminal’s complex conversions skipped window/invert/multiply when running on CUDA because the Multiply module lacked a GPU backend
+
+**Solution:**
+- Added a CUDA implementation that uses the shared tensor helpers for stride-aware element-wise multiplication (both `F32` and `CF32`)
+- Wired the new backend into Meson, exposing `JST_MULTIPLY_CUDA` specializations so existing blocks/modules can instantiate on GPUs
+
+#### Superluminal Graph Update (`src/superluminal/base.cc`)
+**Problem:**
+- The code explicitly bypassed multiply+window steps when `preferredDevice == CUDA`, causing incorrect spectral levels for complex inputs
+
+**Solution:**
+- Removed the bypass so both CPU and CUDA paths build the same window→invert→multiply→FFT chain
+
+**Impact:** ✅ Resolves the last CUDA-specific critical TODO; complex spectra now match CPU behavior regardless of preferred device
+
+---
+
 ### 8. Add Custom Formatter for Complex Numbers
 **Commit:** `445f89b`
 **Files Changed:** 2 files, 9 insertions(+), 12 deletions(-)
@@ -418,6 +441,51 @@ This document tracks all fixes and improvements applied during the current devel
 
 ---
 
+### 13. Add Multi-Channel Audio Support
+**Commit:** `229658e`
+**Files Changed:** 3 files, 25 insertions(+), 4 deletions(-)
+
+#### Audio Module Channel Configuration (`src/modules/audio/generic.cc`, `include/jetstream/modules/audio.hh`, `include/jetstream/blocks/audio.hh`)
+**Problem:**
+- TODO at line 274 in `src/modules/audio/generic.cc` noted hardcoded mono (1 channel)
+- No support for stereo or multi-channel audio playback
+- Resampler and device both configured with hardcoded channel count
+- No UI control for channel selection
+
+**Solution:**
+- Added `channels` parameter to Audio module config (default: 1)
+- Updated resampler initialization to use `config.channels` instead of hardcoded 1
+- Updated device configuration to use `config.channels` instead of hardcoded 1
+- Added channel count to debug info logging
+
+**Block Layer Changes:**
+- Added `channels` config parameter to Audio block
+- Pass channels to module during creation
+- Added UI control with InputInt widget (1-8 channels)
+- Channel changes trigger block reload for proper reconfiguration
+- Enforced reasonable limits (1-8) for device compatibility
+
+**Technical Details:**
+- Miniaudio library handles multi-channel audio with interleaved samples
+- Resampler supports multi-channel processing natively (no changes needed)
+- Circular buffer already handles interleaved data correctly
+- Backward compatible (defaults to mono if not specified)
+
+**Use Cases:**
+- Stereo audio playback (2 channels)
+- 5.1 surround sound (6 channels)
+- 7.1 surround sound (8 channels)
+- Custom multi-channel configurations
+
+**Files Modified:**
+- `include/jetstream/modules/audio.hh` (lines 28-35)
+- `include/jetstream/blocks/audio.hh` (lines 17-24, 92-149)
+- `src/modules/audio/generic.cc` (lines 225, 274, 319)
+
+**Impact:** ✅ Enables stereo and multi-channel audio playback with user-configurable channel count
+
+---
+
 ## TODOs Resolved in This Session
 
 | Location | Original TODO | Status |
@@ -443,8 +511,10 @@ This document tracks all fixes and improvements applied during the current devel
 | `src/backend/devices/vulkan/base.cc:687` | "Pool thermal state periodically" | ✅ FIXED - Query on access (`1f2e8f3`) |
 | `src/backend/devices/webgpu/base.cc:53` | "Pool power status periodically" | ✅ FIXED - Documented defaults (`1f2e8f3`) |
 | `src/backend/devices/webgpu/base.cc:58` | "Pool thermal state periodically" | ✅ FIXED - Documented defaults (`1f2e8f3`) |
+| `src/modules/audio/generic.cc:274` | "Support for more channels" | ✅ FIXED - Multi-channel support (`229658e`) |
+| `src/superluminal/base.cc:704` | "Multiply block doesn't support CUDA" | ✅ FIXED - CUDA backend now available (`8bbdaf0`) |
 
-**Total TODOs Resolved:** 53 (5 critical fixes + 33 documentation + 3 cleanup + 2 CUDA infrastructure + 4 low-impact + 6 monitoring)
+**Total TODOs Resolved:** 55 (5 critical fixes + 33 documentation + 3 cleanup + 3 CUDA infrastructure + 5 low-impact + 6 monitoring + 2 UI)
 
 ---
 
