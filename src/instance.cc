@@ -120,18 +120,7 @@ Result Instance::removeBlock(Locale locale) {
     // Unlink all modules linked to the module being removed.
 
     std::vector<std::pair<Locale, Locale>> unlinkList;
-    // TODO: This is exponential garbage. Implement cached system.
-    for (const auto& [outputPinId, outputRecord] : _flowgraph.nodes().at(locale)->outputMap) {
-        for (const auto& [inputLocale, inputState] : _flowgraph.nodes()) {
-            for (const auto& [inputPinId, inputRecord] : inputState->inputMap) {
-                if (inputRecord.locale == outputRecord.locale && inputLocale.isBlock()) {
-                    const Locale& in = {inputLocale.blockId, inputLocale.moduleId, inputPinId};
-                    const Locale& out = outputRecord.locale;
-                    unlinkList.push_back({in, out});
-                }
-            }
-        }
-    }
+    collectBlockLinks(locale.block(), unlinkList);
 
     for (const auto& [inputLocale, outputLocale] : unlinkList) {
         JST_CHECK(unlinkBlocks(inputLocale.pin(), outputLocale.pin()));
@@ -479,25 +468,31 @@ Result Instance::eraseModule(Locale locale) {
 }
 
 Result Instance::eraseBlock(Locale locale) {
+    const auto blockLocale = locale.block();
+
     // Verify input parameters.
-    if (!_flowgraph.nodes().contains(locale)) {
-        JST_ERROR("[INSTANCE] Block '{}' doesn't exist.", locale);
+    if (!_flowgraph.nodes().contains(blockLocale)) {
+        JST_ERROR("[INSTANCE] Block '{}' doesn't exist.", blockLocale);
         return Result::ERROR;
     }
 
+    unregisterBlockLinks(blockLocale);
+
     // Remove block from compositor.
     if (_compositor) {
-        JST_CHECK(_compositor->removeBlock(locale));
+        JST_CHECK(_compositor->removeBlock(blockLocale));
     }
 
     // Remove module from state.
-    auto state = _flowgraph.nodes().extract(locale).mapped();
+    auto state = _flowgraph.nodes().extract(blockLocale).mapped();
 
     // Destroy the module or bundle.
     JST_CHECK(state->block->destroy());
 
     // Remove block from order.
-    _flowgraph.nodesOrder().erase(std::find(_flowgraph.nodesOrder().begin(), _flowgraph.nodesOrder().end(), locale));
+    _flowgraph.nodesOrder().erase(std::find(_flowgraph.nodesOrder().begin(),
+                                            _flowgraph.nodesOrder().end(),
+                                            blockLocale));
 
     return Result::SUCCESS;
 }
@@ -514,6 +509,8 @@ Result Instance::reset() {
     // Destroying scheduler.
 
     JST_CHECK(_scheduler.destroy());
+
+    clearLinkCaches();
 
     // Destroying blocks.
 
@@ -552,31 +549,115 @@ Result Instance::fetchDependencyTree(Locale locale, std::vector<Locale>& storage
     std::stack<Locale> stack;
     std::unordered_set<Locale, Locale::Hasher> seenLocales;
 
-    stack.push(locale);
-    seenLocales.insert(locale);
+    const Locale root = locale.block();
+    stack.push(root);
+    seenLocales.insert(root);
 
     while (!stack.empty()) {
-        Locale currentLocale = stack.top();
+        const Locale currentLocale = stack.top();
         stack.pop();
 
-        // TODO: Kill this shit with fire. This is an exponential hack. Implement cached system.
-        for (const auto& [outputPinId, outputRecord] : _flowgraph.nodes().at(currentLocale)->outputMap) {
-            for (const auto& [inputLocale, inputState] : _flowgraph.nodes()) {
-                for (const auto& [inputPinId, inputRecord] : inputState->inputMap) {
-                    if (inputRecord.locale == outputRecord.locale && inputLocale.isBlock()) {
-                        Locale nextLocale = inputLocale.block();
-                        if (seenLocales.find(nextLocale) == seenLocales.end()) {
-                            storage.push_back(nextLocale);
-                            stack.push(nextLocale);
-                            seenLocales.insert(nextLocale);
-                        }
-                    }
+        if (!_flowgraph.nodes().contains(currentLocale)) {
+            continue;
+        }
+
+        const auto& node = _flowgraph.nodes().at(currentLocale);
+        for (const auto& [outputPinId, _] : node->outputMap) {
+            const Locale outputPin = {currentLocale.blockId, "", outputPinId};
+            const auto cacheIt = _outputLinkCache.find(outputPin);
+            if (cacheIt == _outputLinkCache.end()) {
+                continue;
+            }
+
+            for (const auto& inputPin : cacheIt->second) {
+                Locale nextLocale = inputPin.block();
+                if (seenLocales.find(nextLocale) == seenLocales.end()) {
+                    storage.push_back(nextLocale);
+                    stack.push(nextLocale);
+                    seenLocales.insert(nextLocale);
                 }
             }
         }
     }
 
     return Result::SUCCESS;
+}
+
+void Instance::registerBlockInputLinks(const Locale& blockLocale, const Parser::RecordMap& inputMap) {
+    for (const auto& [inputPinId, record] : inputMap) {
+        if (inputPinId.empty() || record.locale.empty()) {
+            continue;
+        }
+
+        auto outputPin = record.locale.pin();
+        if (outputPin.pinId.empty()) {
+            continue;
+        }
+
+        Locale inputPin = {blockLocale.blockId, "", inputPinId};
+        _inputLinkCache[inputPin] = outputPin;
+        _outputLinkCache[outputPin].insert(inputPin);
+    }
+}
+
+void Instance::unregisterBlockLinks(const Locale& blockLocale) {
+    if (!_flowgraph.nodes().contains(blockLocale)) {
+        return;
+    }
+
+    const auto& node = _flowgraph.nodes().at(blockLocale);
+
+    for (const auto& [inputPinId, _] : node->inputMap) {
+        Locale inputPin = {blockLocale.blockId, "", inputPinId};
+        auto providerIt = _inputLinkCache.find(inputPin);
+        if (providerIt == _inputLinkCache.end()) {
+            continue;
+        }
+
+        const auto& outputPin = providerIt->second;
+        if (auto consumersIt = _outputLinkCache.find(outputPin); consumersIt != _outputLinkCache.end()) {
+            consumersIt->second.erase(inputPin);
+            if (consumersIt->second.empty()) {
+                _outputLinkCache.erase(consumersIt);
+            }
+        }
+
+        _inputLinkCache.erase(providerIt);
+    }
+
+    for (const auto& [outputPinId, _] : node->outputMap) {
+        Locale outputPin = {blockLocale.blockId, "", outputPinId};
+        if (auto consumersIt = _outputLinkCache.find(outputPin); consumersIt != _outputLinkCache.end()) {
+            for (const auto& inputPin : consumersIt->second) {
+                _inputLinkCache.erase(inputPin);
+            }
+            _outputLinkCache.erase(consumersIt);
+        }
+    }
+}
+
+void Instance::collectBlockLinks(const Locale& blockLocale, std::vector<std::pair<Locale, Locale>>& links) const {
+    if (!_flowgraph.nodes().contains(blockLocale)) {
+        return;
+    }
+
+    const auto& node = _flowgraph.nodes().at(blockLocale);
+    for (const auto& [outputPinId, _] : node->outputMap) {
+        Locale outputPin = {blockLocale.blockId, "", outputPinId};
+        const auto consumersIt = _outputLinkCache.find(outputPin);
+        if (consumersIt == _outputLinkCache.end()) {
+            continue;
+        }
+
+        for (const auto& inputPin : consumersIt->second) {
+            links.emplace_back(inputPin, outputPin);
+        }
+    }
+}
+
+void Instance::clearLinkCaches() {
+    _outputLinkCache.clear();
+    _inputLinkCache.clear();
 }
 
 Result Instance::loadDefaultFonts() {

@@ -576,11 +576,23 @@ Result Compositor::processInteractions() {
     }
 
     if (toggleBlockMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&](){
-            // TODO: Implement.
-            ImGui::InsertNotification({ ImGuiToastType_Warning, 5000, "Toggling a node is not implemented yet." });
+        const auto& [locale, enable] = *toggleBlockMailbox;
+        if (nodeStates.contains(locale.block())) {
+            auto& state = nodeStates.at(locale.block());
+            state.enabled = enable;
+            if (!enable) {
+                state.block->state.viewEnabled = false;
+                state.block->state.controlEnabled = false;
+                state.block->state.previewEnabled = false;
+                state.block->state.fullscreenEnabled = false;
+            }
+            const char* toast = enable ? "Node enabled." : "Node disabled.";
+            ImGui::InsertNotification({ enable ? ImGuiToastType_Success
+                                               : ImGuiToastType_Info,
+                                        2000,
+                                        toast });
             updateFlowgraphBlobMailbox = true;
-        });
+        }
         toggleBlockMailbox.reset();
     }
 
@@ -650,13 +662,24 @@ Result Compositor::processInteractions() {
     }
 
     if (updateFlowgraphBlobMailbox.has_value()) {
+        JST_CHECK(instance.flowgraph().exportToBlob(flowgraphBlob));
         if (sourceEditorEnabled) {
-            JST_DISPATCH_ASYNC([&](){
-                JST_CHECK(instance.flowgraph().exportToBlob(flowgraphBlob));
-                return Result::SUCCESS;
-            });
-            updateFlowgraphBlobMailbox.reset();
+            flowgraphSourceBuffer.assign(flowgraphBlob.begin(), flowgraphBlob.end());
+            flowgraphSourceDirty = false;
         }
+        updateFlowgraphBlobMailbox.reset();
+    }
+
+    if (applyFlowgraphMailbox.has_value()) {
+        auto blob = std::move(*applyFlowgraphMailbox);
+        applyFlowgraphMailbox.reset();
+        JST_CHECK(instance.flowgraph().create());
+        JST_CHECK(instance.flowgraph().importFromBlob(blob));
+        JST_CHECK(checkAutoLayoutState());
+        flowgraphBlob = blob;
+        flowgraphSourceBuffer.assign(flowgraphBlob.begin(), flowgraphBlob.end());
+        flowgraphSourceDirty = false;
+        ImGui::InsertNotification({ImGuiToastType_Success, 2000, "Flowgraph source applied."});
     }
 
     return Result::SUCCESS;
@@ -1332,6 +1355,9 @@ Result Compositor::drawStatic() {
     // Source
     if (interactionTrigger == 7 && flowgraphLoaded) {
         sourceEditorEnabled = !sourceEditorEnabled;
+        if (sourceEditorEnabled) {
+            updateFlowgraphBlobMailbox = true;
+        }
     }
 
     // Rename
@@ -1386,8 +1412,6 @@ Result Compositor::drawStatic() {
     // Draw Source Editor.
     //
 
-    // TODO: Implement editing inside the source editor.
-
     [&](){
         if (!sourceEditorEnabled) {
             return;
@@ -1399,17 +1423,37 @@ Result Compositor::drawStatic() {
             return;
         }
 
-        auto& file = flowgraphBlob;
-
-        if (file.empty()) {
+        if (flowgraphSourceBuffer.empty()) {
             ImGui::Text("Empty source file.");
         } else {
-            ImGui::InputTextMultiline("##SourceFileData",
-                                      const_cast<char*>(file.data()),
-                                      file.size(),
-                                      ImGui::GetContentRegionAvail(),
-                                      ImGuiInputTextFlags_ReadOnly |
-                                      ImGuiInputTextFlags_NoHorizontalScroll);
+            const ImVec2 editorSize = ImVec2(ImGui::GetContentRegionAvail().x,
+                                             ImGui::GetTextLineHeightWithSpacing() * 16.0f);
+            const ImGuiInputTextFlags editorFlags = ImGuiInputTextFlags_AllowTabInput |
+                                                    ImGuiInputTextFlags_NoHorizontalScroll;
+            if (ImGui::InputTextMultiline("##SourceFileData",
+                                          &flowgraphSourceBuffer,
+                                          editorSize,
+                                          editorFlags)) {
+                flowgraphSourceDirty = true;
+            }
+
+            ImGui::Spacing();
+
+            if (flowgraphSourceDirty) {
+                if (ImGui::Button("Apply Changes")) {
+                    applyFlowgraphMailbox = std::vector<char>(flowgraphSourceBuffer.begin(),
+                                                              flowgraphSourceBuffer.end());
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Revert")) {
+                    flowgraphSourceDirty = false;
+                    updateFlowgraphBlobMailbox = true;
+                }
+            } else {
+                if (ImGui::Button("Reload")) {
+                    updateFlowgraphBlobMailbox = true;
+                }
+            }
         }
 
         ImGui::End();
@@ -2002,8 +2046,14 @@ Result Compositor::drawStatic() {
                 ImGui::TableSetColumnIndex(1);
                 ImGui::SetNextItemWidth(-1);
                 auto description = instance.flowgraph().description();
-                // TODO: Implement automatic line wrapping.
-                if (ImGui::InputTextMultiline("##flowgraph-info-description", &description)) {
+                const ImVec2 descSize = ImVec2(ImGui::GetContentRegionAvail().x,
+                                               ImGui::GetTextLineHeightWithSpacing() * 6.0f);
+                const ImGuiInputTextFlags descFlags = ImGuiInputTextFlags_AllowTabInput |
+                                                      ImGuiInputTextFlags_NoHorizontalScroll;
+                if (ImGui::InputTextMultiline("##flowgraph-info-description",
+                                              &description,
+                                              descSize,
+                                              descFlags)) {
                     JST_CHECK_THROW(instance.flowgraph().setDescription(description));
                 }
 
@@ -2469,7 +2519,8 @@ Result Compositor::drawFlowgraph() {
     //
 
     for (const auto& [_, state] : nodeStates) {
-        if (!state.block->getState().viewEnabled ||
+        if (!state.enabled ||
+            !state.block->getState().viewEnabled ||
             !state.block->shouldDrawView() ||
             !state.block->complete() ||
             fullscreenEnabled) {
@@ -2493,7 +2544,8 @@ Result Compositor::drawFlowgraph() {
     //
 
     for (const auto& [_, state] : nodeStates) {
-        if (!state.block->getState().fullscreenEnabled ||
+        if (!state.enabled ||
+            !state.block->getState().fullscreenEnabled ||
             !state.block->shouldDrawFullscreen() ||
             !state.block->complete()) {
             fullscreenEnabled = false;
@@ -2540,7 +2592,8 @@ Result Compositor::drawFlowgraph() {
     //
 
     for (const auto& [_, state] : nodeStates) {
-        if (!state.block->getState().controlEnabled ||
+        if (!state.enabled ||
+            !state.block->getState().controlEnabled ||
             !state.block->shouldDrawControl() ||
             fullscreenEnabled) {
             continue;
@@ -2620,7 +2673,8 @@ Result Compositor::drawFlowgraph() {
             nodeWidth = std::max({titleWidth, nodeWidth, controlWidth, previewWidth});
 
             // Push node-specific style.
-            if (block->complete()) {
+            const bool nodeEnabled = state.enabled;
+            if (block->complete() && nodeEnabled) {
                 switch (block->device()) {
                     case Device::CPU:
                         ImNodes::PushColorStyle(ImNodesCol_TitleBar,         CpuColor);
@@ -2891,9 +2945,10 @@ Result Compositor::drawFlowgraph() {
             const auto& [inputLocale, outputLocale] = locales;
             const auto& inputPinId = inputLocalePinMap.at(inputLocale);
             const auto& outputPinId = outputLocalePinMap.at(outputLocale);
-            const auto& outputBlock = nodeStates.at(outputLocale.block()).block;
+            const auto& outputNodeState = nodeStates.at(outputLocale.block());
+            const auto& outputBlock = outputNodeState.block;
 
-            if (outputBlock->complete()) {
+            if (outputBlock->complete() && outputNodeState.enabled) {
                 switch (outputBlock->device()) {
                     case Device::CPU:
                         ImNodes::PushColorStyle(ImNodesCol_Link,         CpuColor);

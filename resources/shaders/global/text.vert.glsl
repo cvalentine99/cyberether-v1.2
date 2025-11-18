@@ -18,7 +18,13 @@ layout(location = 5) in vec4 inTransform3;
 layout(location = 0) out vec2 outTexcoord;
 
 void main() {
-    mat4 inTransform = mat4(inTransform0, inTransform1, inTransform2, inTransform3);
-    gl_Position = inTransform * vec4(inPosition, 1.0, 1.0);
+    vec4 localPosition = vec4(inPosition, 1.0, 1.0);
+    vec4 transformed =
+        inTransform0 * localPosition.x +
+        inTransform1 * localPosition.y +
+        inTransform2 * localPosition.z +
+        inTransform3 * localPosition.w;
+
+    gl_Position = transformed;
     outTexcoord = inTexcoord;
 }

@@ -29,10 +29,12 @@ CUDA::CUDA(const Config& config) : config(config), cache({}) {
         JST_FATAL("[CUDA] Cannot get desired device ID ({}): {}", config.deviceId, err);
     });
     JST_CUDA_CHECK_THROW(cudaSetDevice(config.deviceId), [&]{
-        JST_FATAL("[CUDA] Cannot get desired device ID ({}): {}", config.deviceId, err);
+        JST_FATAL("[CUDA] Cannot set device ID ({}): {}", config.deviceId, err);
     });
-    JST_CUDA_CHECK_THROW(cuCtxCreate(&context, 0, device), [&]{
-        JST_FATAL("[CUDA] Cannot create context for device ID ({}): {}", config.deviceId, err);
+    // Get the primary context instead of creating a new one
+    // This avoids conflicts between driver API and runtime API
+    JST_CUDA_CHECK_THROW(cuDevicePrimaryCtxRetain(&context, device), [&]{
+        JST_FATAL("[CUDA] Cannot retain primary context for device ID ({}): {}", config.deviceId, err);
     });
     _isAvailable = true;
 
@@ -123,7 +125,7 @@ CUDA::CUDA(const Config& config) : config(config), cache({}) {
 
 CUDA::~CUDA() {
     if (_isAvailable) {
-        cuCtxDestroy(context);
+        cuDevicePrimaryCtxRelease(device);
     }
 }
 

@@ -15,13 +15,13 @@
 #include "jetstream/module.hh"
 #include "jetstream/block.hh"
 #include "jetstream/parser.hh"
-#include "jetstream/block.hh"
 #include "jetstream/compute/base.hh"
 #include "jetstream/render/base.hh"
 #include "jetstream/render/tools/imnodes.h"
 #include "jetstream/render/tools/imgui_icons_ext.hh"
 #include "jetstream/render/tools/imgui_notify_ext.h"
 #include "jetstream/render/tools/imgui_markdown.hh"
+#include "jetstream/compositor/types.hh"
 
 // TODO: Break this file up into smaller pieces.
 
@@ -61,35 +61,20 @@ class JETSTREAM_API Compositor {
     }
 
  private:
-    typedef std::pair<std::string, Device> CreateBlockMail;
-    typedef std::pair<Locale, Locale> LinkMail;
-    typedef std::pair<Locale, Locale> UnlinkMail;
-    typedef Locale DeleteBlockMail;
-    typedef Locale ReloadBlockMail;
-    typedef std::pair<Locale, std::string> RenameBlockMail;
-    typedef std::pair<Locale, Device> ChangeBlockBackendMail;
-    typedef std::pair<Locale, std::tuple<std::string, std::string>> ChangeBlockDataTypeMail;
-    typedef std::pair<Locale, bool> ToggleBlockMail;
+    using CreateBlockMail = CompositorDetail::CreateBlockMail;
+    using LinkMail = CompositorDetail::LinkMail;
+    using UnlinkMail = CompositorDetail::UnlinkMail;
+    using DeleteBlockMail = CompositorDetail::DeleteBlockMail;
+    using ReloadBlockMail = CompositorDetail::ReloadBlockMail;
+    using RenameBlockMail = CompositorDetail::RenameBlockMail;
+    using ChangeBlockBackendMail = CompositorDetail::ChangeBlockBackendMail;
+    using ChangeBlockDataTypeMail = CompositorDetail::ChangeBlockDataTypeMail;
+    using ToggleBlockMail = CompositorDetail::ToggleBlockMail;
 
-    typedef U64 LinkId;
-    typedef U64 PinId;
-    typedef U64 NodeId;
-
-    struct NodeState {
-        std::shared_ptr<Block> block;
-
-        Parser::RecordMap inputMap;
-        Parser::RecordMap outputMap;
-        Parser::RecordMap stateMap;
-        Block::Fingerprint fingerprint;
-        std::string title;
-
-        NodeId id;
-        U64 clusterLevel;
-        std::unordered_map<PinId, Locale> inputs;
-        std::unordered_map<PinId, Locale> outputs;
-        std::unordered_set<NodeId> edges;
-    };
+    using LinkId = CompositorDetail::LinkId;
+    using PinId = CompositorDetail::PinId;
+    using NodeId = CompositorDetail::NodeId;
+    using NodeState = CompositorDetail::NodeState;
 
     void lock();
     void unlock();
@@ -122,6 +107,8 @@ class JETSTREAM_API Compositor {
     std::string filenameField;
     std::string flowgraphFilename;
     std::vector<char> flowgraphBlob;
+    std::string flowgraphSourceBuffer;
+    bool flowgraphSourceDirty = false;
 
     std::atomic_flag interfaceHalt{false};
 
@@ -161,6 +148,7 @@ class JETSTREAM_API Compositor {
     std::optional<bool> saveFlowgraphMailbox;
     std::optional<bool> newFlowgraphMailbox;
     std::optional<bool> exitFullscreenMailbox;
+    std::optional<std::vector<char>> applyFlowgraphMailbox;
 
     ImGuiID mainNodeId;
     bool globalModalToggle;

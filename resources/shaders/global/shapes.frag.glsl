@@ -1,9 +1,6 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-// TODO: Implement borders.
-// TODO: Implement rounded corners.
-
 layout(location = 0) in vec2 inLocalPos;
 layout(location = 1) in vec4 inFillColor;
 layout(location = 2) in vec4 inBorderColor;
@@ -26,6 +23,14 @@ float sdfRect(vec2 p, vec2 size) {
     return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
 }
 
+float sdfRoundedRect(vec2 p, vec2 size, float radius) {
+    vec2 halfSize = size * 0.5;
+    float clampedRadius = clamp(radius, 0.0, min(halfSize.x, halfSize.y));
+
+    vec2 q = abs(p) - (halfSize - vec2(clampedRadius));
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - clampedRadius;
+}
+
 float sdfTriangle(vec2 p) {
     // Optimized equilateral triangle for better antialiasing
     const float k = sqrt(3.0);
@@ -40,8 +45,8 @@ float sdfTriangle(vec2 p) {
 
 void main() {
     int shapeType = int(inShapeParams.x);
-    float borderWidth = inShapeParams.y;
-    float cornerRadius = inShapeParams.z;
+    float borderWidth = max(inShapeParams.y, 0.0);
+    float cornerRadius = max(inShapeParams.z, 0.0);
 
     float distance = 0.0;
 
@@ -49,7 +54,11 @@ void main() {
     if (shapeType == TYPE_CIRCLE) {
         distance = sdfCircle(inLocalPos, 0.5);
     } else if (shapeType == TYPE_RECT) {
-        distance = sdfRect(inLocalPos, vec2(1.0));
+        if (cornerRadius > 0.0) {
+            distance = sdfRoundedRect(inLocalPos, vec2(1.0), min(cornerRadius, 0.5));
+        } else {
+            distance = sdfRect(inLocalPos, vec2(1.0));
+        }
     } else if (shapeType == TYPE_TRIANGLE) {
         distance = sdfTriangle(inLocalPos);
     }
@@ -60,9 +69,24 @@ void main() {
     // Edge sharpness control
     float edgeSharpness = 0.75;
 
-    // Shape fill with improved antialiasing
-    float fillAlpha = smoothstep(edgeSharpness * width, -edgeSharpness * width, distance);
+    // Outer shape coverage (fill + border)
+    float shapeAlpha = smoothstep(edgeSharpness * width, -edgeSharpness * width, distance);
 
-    // Combine fill and border
-    outColor = vec4(inFillColor.r, inFillColor.g, inFillColor.b, inFillColor.a * fillAlpha);
+    // Inner fill boundary takes the border width into account
+    float normalizedBorder = clamp(borderWidth, 0.0, 0.5);
+    float fillDistance = distance + normalizedBorder;
+    float fillAlpha = smoothstep(edgeSharpness * width, -edgeSharpness * width, fillDistance);
+
+    float borderAlpha = clamp(shapeAlpha - fillAlpha, 0.0, 1.0);
+
+    float fillLayerAlpha = fillAlpha * inFillColor.a;
+    float borderLayerAlpha = borderAlpha * inBorderColor.a;
+    float outAlpha = fillLayerAlpha + borderLayerAlpha;
+
+    vec3 color = vec3(0.0);
+    if (outAlpha > 0.0) {
+        color = (inFillColor.rgb * fillLayerAlpha + inBorderColor.rgb * borderLayerAlpha) / outAlpha;
+    }
+
+    outColor = vec4(color, clamp(outAlpha, 0.0, 1.0));
 }

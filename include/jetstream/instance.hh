@@ -381,6 +381,8 @@ class JETSTREAM_API Instance {
                                         node->stateMap,
                                         node->fingerprint));
 
+        registerBlockInputLinks(locale.block(), node->inputMap);
+
         return Result::SUCCESS;
     }
 
@@ -452,6 +454,11 @@ class JETSTREAM_API Instance {
     }
 
  private:
+    using PinConsumers = std::unordered_map<Locale,
+                                            std::unordered_set<Locale, Locale::Hasher>,
+                                            Locale::Hasher>;
+    using PinProviders = std::unordered_map<Locale, Locale, Locale::Hasher>;
+
     Config config;
 
     Scheduler _scheduler;
@@ -467,6 +474,14 @@ class JETSTREAM_API Instance {
     Result fetchDependencyTree(Locale locale, std::vector<Locale>& storage);
 
     Result blockUpdater(Locale locale, const std::function<Result(std::shared_ptr<Flowgraph::Node>&)>& updater);
+
+    void registerBlockInputLinks(const Locale& blockLocale, const Parser::RecordMap& inputMap);
+    void unregisterBlockLinks(const Locale& blockLocale);
+    void collectBlockLinks(const Locale& blockLocale, std::vector<std::pair<Locale, Locale>>& links) const;
+    void clearLinkCaches();
+
+    PinConsumers _outputLinkCache;
+    PinProviders _inputLinkCache;
 };
 
 }  // namespace Jetstream

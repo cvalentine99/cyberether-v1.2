@@ -10,6 +10,12 @@ void benchmark(ankerl::nanobench::Bench& bench, std::string name) {
         .sampleRate = 1000000.0 COMMA
         .frequency = 1000.0 COMMA
         .amplitude = 1.0 COMMA
+        .phase = 0.0 COMMA
+        .dcOffset = 0.0 COMMA
+        .noiseVariance = 1.0 COMMA
+        .chirpStartFreq = 1000.0 COMMA
+        .chirpEndFreq = 10000.0 COMMA
+        .chirpDuration = 1.0 COMMA
         .bufferSize = 1024
     }, {}, IT);
 
@@ -19,6 +25,12 @@ void benchmark(ankerl::nanobench::Bench& bench, std::string name) {
         .sampleRate = 1000000.0 COMMA
         .frequency = 1000.0 COMMA
         .amplitude = 1.0 COMMA
+        .phase = 0.0 COMMA
+        .dcOffset = 0.0 COMMA
+        .noiseVariance = 1.0 COMMA
+        .chirpStartFreq = 1000.0 COMMA
+        .chirpEndFreq = 10000.0 COMMA
+        .chirpDuration = 1.0 COMMA
         .bufferSize = 8192
     }, {}, IT);
 
@@ -28,6 +40,12 @@ void benchmark(ankerl::nanobench::Bench& bench, std::string name) {
         .sampleRate = 1000000.0 COMMA
         .frequency = 1000.0 COMMA
         .amplitude = 1.0 COMMA
+        .phase = 0.0 COMMA
+        .dcOffset = 0.0 COMMA
+        .noiseVariance = 1.0 COMMA
+        .chirpStartFreq = 1000.0 COMMA
+        .chirpEndFreq = 10000.0 COMMA
+        .chirpDuration = 1.0 COMMA
         .bufferSize = 65536
     }, {}, IT);
 
@@ -35,10 +53,14 @@ void benchmark(ankerl::nanobench::Bench& bench, std::string name) {
     JST_BENCHMARK_RUN("Chirp 8192", {
         .signalType = SignalType::Chirp COMMA
         .sampleRate = 1000000.0 COMMA
+        .frequency = 1000.0 COMMA
+        .amplitude = 1.0 COMMA
+        .phase = 0.0 COMMA
+        .dcOffset = 0.0 COMMA
+        .noiseVariance = 1.0 COMMA
         .chirpStartFreq = 1000.0 COMMA
         .chirpEndFreq = 10000.0 COMMA
         .chirpDuration = 1.0 COMMA
-        .amplitude = 1.0 COMMA
         .bufferSize = 8192
     }, {}, IT);
 
@@ -46,8 +68,14 @@ void benchmark(ankerl::nanobench::Bench& bench, std::string name) {
     JST_BENCHMARK_RUN("Noise 8192", {
         .signalType = SignalType::Noise COMMA
         .sampleRate = 1000000.0 COMMA
+        .frequency = 1000.0 COMMA
         .amplitude = 1.0 COMMA
+        .phase = 0.0 COMMA
+        .dcOffset = 0.0 COMMA
         .noiseVariance = 1.0 COMMA
+        .chirpStartFreq = 1000.0 COMMA
+        .chirpEndFreq = 10000.0 COMMA
+        .chirpDuration = 1.0 COMMA
         .bufferSize = 8192
     }, {}, IT);
 }

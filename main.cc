@@ -1,3 +1,7 @@
+#include <algorithm>
+#include <array>
+#include <cctype>
+#include <string_view>
 #include <thread>
 
 #include "jetstream/base.hh"
@@ -43,10 +47,18 @@ int main(int argc, char* argv[]) {
         }
 
         if (arg == "--backend") {
-            // TODO: Add check for valid backend.
+            if (i + 1 >= argc) {
+                std::cerr << "[ERROR] --backend requires a value." << std::endl;
+                return 1;
+            }
 
-            if (i + 1 < argc) {
-                prefferedBackend = StringToDevice(argv[++i]);
+            const std::string backendName = argv[++i];
+            try {
+                prefferedBackend = StringToDevice(backendName);
+            } catch (const Device&) {
+                std::cerr << "[ERROR] Unknown backend '" << backendName
+                          << "'. Valid options: Metal, Vulkan, WebGPU, CPU, CUDA, None." << std::endl;
+                return 1;
             }
 
             continue;
@@ -71,15 +83,33 @@ int main(int argc, char* argv[]) {
         }
 
         if (arg == "--benchmark") {
-            // TODO: Add check for valid output type.
-
             std::string outputType = "markdown";
 
             if (i + 1 < argc) {
                 outputType = std::string(argv[++i]);
             }
 
-            Benchmark::Run(outputType);
+            std::string normalized = outputType;
+            std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+
+            static const std::array<std::string_view, 4> kValidBenchmarkOutputs = {
+                "markdown", "json", "csv", "quiet"
+            };
+
+            const auto isValid = std::any_of(kValidBenchmarkOutputs.begin(),
+                                             kValidBenchmarkOutputs.end(),
+                                             [&](std::string_view candidate) {
+                                                 return normalized == candidate;
+                                             });
+            if (!isValid) {
+                std::cerr << "[ERROR] Unknown benchmark output '" << outputType
+                          << "'. Valid options: markdown, json, csv, quiet." << std::endl;
+                return 1;
+            }
+
+            Benchmark::Run(normalized);
 
             return 0;
         }
@@ -110,10 +140,18 @@ int main(int argc, char* argv[]) {
         }
 
         if (arg == "--codec") {
-            // TODO: Add check for valid codec.
+            if (i + 1 >= argc) {
+                std::cerr << "[ERROR] --codec requires a value." << std::endl;
+                return 1;
+            }
 
-            if (i + 1 < argc) {
-                viewportConfig.codec = Viewport::StringToVideoCodec(argv[++i]);
+            const std::string codecName = argv[++i];
+            try {
+                viewportConfig.codec = Viewport::StringToVideoCodec(codecName);
+            } catch (const Result&) {
+                std::cerr << "[ERROR] Unknown codec '" << codecName
+                          << "'. Valid options: H264, AV1, VP8, VP9, FFV1." << std::endl;
+                return 1;
             }
 
             continue;

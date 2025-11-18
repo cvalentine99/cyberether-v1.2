@@ -48,6 +48,7 @@ struct Shapes::Impl {
         std::span<F32> instanceRotationsBuffer;
         std::span<Extent2D<F32>> instancePositionsBuffer;
         std::span<Extent2D<F32>> instanceSizesBuffer;
+        U64 instanceOffset = 0;
     };
 
     // Variables.
@@ -317,6 +318,7 @@ Result Shapes::create(Window* window) {
             .instanceRotationsBuffer = std::span<F32>({pimpl->instanceRotations.data(), pimpl->instanceRotations.size()}).subspan(currentInstanceOffset, instanceCount),
             .instancePositionsBuffer = std::span<Extent2D<F32>>({pimpl->instancePositions.data(), pimpl->instancePositions.size()}).subspan(currentInstanceOffset, instanceCount),
             .instanceSizesBuffer = std::span<Extent2D<F32>>({pimpl->instanceSizes.data(), pimpl->instanceSizes.size()}).subspan(currentInstanceOffset, instanceCount),
+            .instanceOffset = currentInstanceOffset,
         };
 
         for (U64 i = 0; i < instanceCount; ++i) {
@@ -444,9 +446,25 @@ Result Shapes::getColors(const std::string& elementId, std::span<ColorRGBA<F32>>
     return Result::SUCCESS;
 }
 
-Result Shapes::updateColors(const std::string&) {
-    // TODO: Implement element specific update.
-    pimpl->updateColorBufferFlag = true;
+Result Shapes::updateColors(const std::string& elementId) {
+    if (elementId.empty()) {
+        pimpl->updateColorBufferFlag = true;
+        return Result::SUCCESS;
+    }
+
+    if (!pimpl->elementIndex.contains(elementId)) {
+        JST_ERROR("[SHAPES] Element '{}' not found (color update).", elementId);
+        return Result::ERROR;
+    }
+
+    const auto& element = pimpl->elements.at(pimpl->elementIndex.at(elementId));
+    const U64 count = element.instanceColorsBuffer.size();
+    if (count == 0) {
+        return Result::SUCCESS;
+    }
+
+    JST_CHECK(pimpl->colorsBuffer->update(element.instanceOffset, count));
+    pimpl->computeInstanceBufferFlag = true;
     return Result::SUCCESS;
 }
 
@@ -459,9 +477,25 @@ Result Shapes::getRotations(const std::string& elementId, std::span<F32>& rotati
     return Result::SUCCESS;
 }
 
-Result Shapes::updateRotations(const std::string&) {
-    // TODO: Implement element specific update.
-    pimpl->updateRotationBufferFlag = true;
+Result Shapes::updateRotations(const std::string& elementId) {
+    if (elementId.empty()) {
+        pimpl->updateRotationBufferFlag = true;
+        return Result::SUCCESS;
+    }
+
+    if (!pimpl->elementIndex.contains(elementId)) {
+        JST_ERROR("[SHAPES] Element '{}' not found (rotation update).", elementId);
+        return Result::ERROR;
+    }
+
+    const auto& element = pimpl->elements.at(pimpl->elementIndex.at(elementId));
+    const U64 count = element.instanceRotationsBuffer.size();
+    if (count == 0) {
+        return Result::SUCCESS;
+    }
+
+    JST_CHECK(pimpl->rotationsBuffer->update(element.instanceOffset, count));
+    pimpl->computeInstanceBufferFlag = true;
     return Result::SUCCESS;
 }
 
@@ -474,9 +508,25 @@ Result Shapes::getPositions(const std::string& elementId, std::span<Extent2D<F32
     return Result::SUCCESS;
 }
 
-Result Shapes::updatePositions(const std::string&) {
-    // TODO: Implement element specific update.
-    pimpl->updatePositionBufferFlag = true;
+Result Shapes::updatePositions(const std::string& elementId) {
+    if (elementId.empty()) {
+        pimpl->updatePositionBufferFlag = true;
+        return Result::SUCCESS;
+    }
+
+    if (!pimpl->elementIndex.contains(elementId)) {
+        JST_ERROR("[SHAPES] Element '{}' not found (position update).", elementId);
+        return Result::ERROR;
+    }
+
+    const auto& element = pimpl->elements.at(pimpl->elementIndex.at(elementId));
+    const U64 count = element.instancePositionsBuffer.size();
+    if (count == 0) {
+        return Result::SUCCESS;
+    }
+
+    JST_CHECK(pimpl->positionsBuffer->update(element.instanceOffset, count));
+    pimpl->computeInstanceBufferFlag = true;
     return Result::SUCCESS;
 }
 
@@ -489,9 +539,25 @@ Result Shapes::getSizes(const std::string& elementId, std::span<Extent2D<F32>>& 
     return Result::SUCCESS;
 }
 
-Result Shapes::updateSizes(const std::string&) {
-    // TODO: Implement element specific update.
-    pimpl->updateSizeBufferFlag = true;
+Result Shapes::updateSizes(const std::string& elementId) {
+    if (elementId.empty()) {
+        pimpl->updateSizeBufferFlag = true;
+        return Result::SUCCESS;
+    }
+
+    if (!pimpl->elementIndex.contains(elementId)) {
+        JST_ERROR("[SHAPES] Element '{}' not found (size update).", elementId);
+        return Result::ERROR;
+    }
+
+    const auto& element = pimpl->elements.at(pimpl->elementIndex.at(elementId));
+    const U64 count = element.instanceSizesBuffer.size();
+    if (count == 0) {
+        return Result::SUCCESS;
+    }
+
+    JST_CHECK(pimpl->sizesBuffer->update(element.instanceOffset, count));
+    pimpl->computeInstanceBufferFlag = true;
     return Result::SUCCESS;
 }
 

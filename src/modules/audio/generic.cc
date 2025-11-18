@@ -3,6 +3,10 @@
 
 #include "miniaudio.h"
 
+#include <codecvt>
+#include <cstring>
+#include <locale>
+
 namespace Jetstream {
 
 template<Device D, typename T>
@@ -29,7 +33,54 @@ struct Audio<D, T>::Impl {
     static void callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
     static std::vector<std::pair<ma_device_id, std::string>> GetAvailableDevice();
     static void GenerateUniqueName(std::string& name, const ma_device_id& id);
+    static std::string ConvertWasapiId(const ma_wchar_win32 (&id)[64]);
+    static std::string ConvertDsoundId(const ma_uint8 (&id)[16]);
 };
+
+template<Device D, typename T>
+std::string Audio<D, T>::Impl::ConvertWasapiId(const ma_wchar_win32 (&id)[64]) {
+    std::u16string utf16;
+    for (const auto ch : id) {
+        if (ch == 0) {
+            break;
+        }
+        utf16.push_back(static_cast<char16_t>(ch));
+    }
+
+    if (utf16.empty()) {
+        return {};
+    }
+
+    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
+    return converter.to_bytes(utf16);
+}
+
+template<Device D, typename T>
+std::string Audio<D, T>::Impl::ConvertDsoundId(const ma_uint8 (&id)[16]) {
+    struct GuidParts {
+        U32 data1;
+        U16 data2;
+        U16 data3;
+        U8 data4[8];
+    } guid;
+
+    std::memcpy(&guid, id, sizeof(GuidParts));
+
+    return jst::fmt::format(
+        "{{{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}}}",
+        guid.data1,
+        guid.data2,
+        guid.data3,
+        guid.data4[0],
+        guid.data4[1],
+        guid.data4[2],
+        guid.data4[3],
+        guid.data4[4],
+        guid.data4[5],
+        guid.data4[6],
+        guid.data4[7]
+    );
+}
 
 template<Device D, typename T>
 void Audio<D, T>::Impl::GenerateUniqueName(std::string& name, const ma_device_id& id) {
@@ -60,13 +111,12 @@ void Audio<D, T>::Impl::GenerateUniqueName(std::string& name, const ma_device_id
     } else if (id.winmm != 0) {
         name = jst::fmt::format("{} ({})", name, id.winmm);
     } else if (id.wasapi[0] != '\0') {
-        // TODO: Implement wchar to string conversion.
-        const U64 sum = std::accumulate(id.wasapi, id.wasapi + sizeof(id.wasapi), 0);
-        name = jst::fmt::format("{} ({:08X})", name, sum);
+        const auto wasapiId = Impl::ConvertWasapiId(id.wasapi);
+        if (!wasapiId.empty()) {
+            name = jst::fmt::format("{} ({})", name, wasapiId);
+        }
     } else if (id.dsound[0] != '\0') {
-        // TODO: Implement GUID to string conversion.
-        const U64 sum = std::accumulate(id.dsound, id.dsound + sizeof(id.dsound), 0);
-        name = jst::fmt::format("{} ({:08X})", name, sum);
+        name = jst::fmt::format("{} ({})", name, Impl::ConvertDsoundId(id.dsound));
     }
 }
 

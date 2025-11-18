@@ -232,7 +232,7 @@ Result CUDA::launchKernel(const std::string& name,
                                   grid[0], grid[1], grid[2], 
                                   block[0], block[1], block[2],
                                   0, _stream, arguments, 0), [&]{
-        JST_ERROR("[CUDA] Can't launch kernel: {}", err);
+        JST_ERROR("[CUDA] Can't launch kernel '{}': {}", name, err);
     });
 
     return Result::SUCCESS;

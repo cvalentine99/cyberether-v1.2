@@ -25,9 +25,14 @@ layout(location = 3) out vec4 outShapeParams;
 layout(location = 4) out vec2 outPixelSize;
 
 void main() {
-    mat4 inTransform = mat4(inTransform0, inTransform1, inTransform2, inTransform3);
+    vec4 localPosition = vec4(inPosition, 1.0, 1.0);
+    vec4 transformed =
+        inTransform0 * localPosition.x +
+        inTransform1 * localPosition.y +
+        inTransform2 * localPosition.z +
+        inTransform3 * localPosition.w;
 
-    gl_Position = inTransform * vec4(inPosition, 1.0, 1.0);
+    gl_Position = transformed;
 
     // Pass local position for distance calculations in fragment shader
     outLocalPos = inPosition;

@@ -73,6 +73,29 @@ Result Soapy<D, T>::create() {
 
     try {
         const auto devices = SoapySDR::Device::enumerate(args);
+
+        if (devices.empty()) {
+            JST_ERROR("No SoapySDR devices found matching: '{}'", config.deviceString);
+
+            // List available devices to help debugging
+            const auto allDevices = SoapySDR::Device::enumerate();
+            if (allDevices.empty()) {
+                JST_ERROR("No SoapySDR devices found at all. Check if device is connected.");
+            } else {
+                JST_ERROR("Available devices:");
+                for (size_t i = 0; i < allDevices.size(); i++) {
+                    const auto& dev = allDevices[i];
+                    std::string devStr;
+                    for (const auto& [key, val] : dev) {
+                        if (!devStr.empty()) devStr += ", ";
+                        devStr += key + "=" + val;
+                    }
+                    JST_ERROR("  [{}] {}", i, devStr);
+                }
+            }
+            return Result::ERROR;
+        }
+
         impl->deviceLabel = devices.at(0).at("label");
         impl->soapyDevice = SoapySDR::Device::make(devices.at(0));
     } catch(const std::exception& e) {
