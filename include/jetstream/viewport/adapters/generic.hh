@@ -30,7 +30,9 @@ struct Config {
     Viewport::VideoCodec codec = Viewport::VideoCodec::H264;
 
     /// @brief Enable auto-join in the remote viewport (insecure).
-    // TODO: [beta1] Implement auto-join functionality.
+    /// When enabled, all pending sessions are automatically approved without
+    /// requiring manual authorization via the interactive TUI. This is useful
+    /// for development and testing but should not be used in production.
     bool autoJoin = false;
 
     /// @brief Whether hardware acceleration is enabled.
