@@ -6,6 +6,11 @@
 
 namespace Jetstream::Render {
 
+// Number of frames to wait before destroying window attachments.
+// This ensures attachments are no longer in use by the GPU before destruction.
+// Value should be >= max frames in flight across all rendering backends.
+constexpr U32 ATTACHMENT_DESTRUCTION_DELAY_FRAMES = 4;
+
 Result Window::create() {
     // Set variables.
 
@@ -210,7 +215,7 @@ Result Window::processAttachmentQueues() {
 
     for (auto& attachment : belated) {
         destroyQueue.push({
-            .expiration = frameCount + 4,  // TODO: Replace with value from implementation.
+            .expiration = frameCount + ATTACHMENT_DESTRUCTION_DELAY_FRAMES,
             .attachment = attachment,
         });
     }
