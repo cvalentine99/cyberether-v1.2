@@ -18,12 +18,7 @@ Result MultiplyConstant<D, T>::create() {
 
 template<Device D, typename T>
 void MultiplyConstant<D, T>::info() const {
-    // TODO: Add custom formater for complex type.
-    if constexpr (IsComplex<T>::value) {
-        JST_DEBUG("  Constant: ({}, {})", config.constant.real(), config.constant.imag());
-    } else {
-        JST_DEBUG("  Constant: {}", config.constant);
-    }
+    JST_DEBUG("  Constant: {}", config.constant);
 }
 
 }  // namespace Jetstream

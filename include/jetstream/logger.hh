@@ -14,6 +14,7 @@
 #include <fmt/ostream.h>
 #include <fmt/ranges.h>
 #include <fmt/chrono.h>
+#include <fmt/std.h>
 
 #endif  // JST_FMT_INCLUDED
 
