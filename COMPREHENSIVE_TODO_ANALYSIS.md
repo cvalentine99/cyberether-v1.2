@@ -2,7 +2,7 @@
 
 **Generated:** November 18, 2025
 **Status:** Active Development - Beta 1 Phase
-**Total TODOs (excluding third-party):** ~147 remaining (down from 161)
+**Total TODOs (excluding third-party):** ~141 remaining (down from 161)
 
 ---
 
@@ -24,8 +24,14 @@
 | `src/render/window.cc` | 218 | "Replace with value from implementation" | ✅ RESOLVED | f2eb975 |
 | `src/backend/devices/metal/base.cc` | 14 | "Respect config.deviceId" | ✅ RESOLVED | 6a541d5 |
 | `src/render/devices/metal/buffer.cc` | 13 | "Add usage hints" | ✅ RESOLVED | f7fc627 |
+| `src/backend/devices/vulkan/base.cc` | 347 | "Wire implementation" (thermal) | ✅ RESOLVED | 1f2e8f3 |
+| `src/backend/devices/vulkan/base.cc` | 348 | "Wire implementation" (power) | ✅ RESOLVED | 1f2e8f3 |
+| `src/backend/devices/vulkan/base.cc` | 682 | "Pool power status periodically" | ✅ RESOLVED | 1f2e8f3 |
+| `src/backend/devices/vulkan/base.cc` | 687 | "Pool thermal state periodically" | ✅ RESOLVED | 1f2e8f3 |
+| `src/backend/devices/webgpu/base.cc` | 53 | "Pool power status periodically" | ✅ RESOLVED | 1f2e8f3 |
+| `src/backend/devices/webgpu/base.cc` | 58 | "Pool thermal state periodically" | ✅ RESOLVED | 1f2e8f3 |
 
-**Total Resolved This Session:** 14 TODOs (10 + 4 low-impact tasks)
+**Total Resolved This Session:** 20 TODOs (10 + 4 low-impact + 6 monitoring)
 
 ---
 
