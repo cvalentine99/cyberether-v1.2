@@ -10,7 +10,6 @@ Implementation::BufferImp(const Config& config) : Buffer(config) {
 Result Implementation::create() {
     JST_DEBUG("[METAL] Creating buffer.");
 
-    // TODO: Add usage hints.
     auto device = Backend::State<Device::Metal>()->getDevice();
     const auto& byteSize = config.size * config.elementByteSize;
 
@@ -18,9 +17,25 @@ Result Implementation::create() {
         buffer = static_cast<MTL::Buffer*>(config.buffer);
         buffer->retain();
     } else {
+        // Set appropriate resource options based on buffer usage.
+        MTL::ResourceOptions resourceOptions = MTL::ResourceStorageModeShared;
+
+        // Use write-combined CPU cache mode for buffers that are frequently updated from CPU.
+        // This improves performance for vertex, index, and uniform buffers that change each frame.
+        if ((config.target & Target::VERTEX) == Target::VERTEX ||
+            (config.target & Target::VERTEX_INDICES) == Target::VERTEX_INDICES ||
+            (config.target & Target::UNIFORM) == Target::UNIFORM ||
+            (config.target & Target::UNIFORM_DYNAMIC) == Target::UNIFORM_DYNAMIC) {
+            resourceOptions |= MTL::ResourceCPUCacheModeWriteCombined;
+        }
+
+        // Storage buffers can benefit from default cache mode if read back to CPU,
+        // or private storage if GPU-only (though we use shared for CPU accessibility).
+        // Keep default cache mode for storage buffers to allow efficient CPU readback.
+
         buffer = device->newBuffer(config.buffer,
                                    byteSize,
-                                   MTL::ResourceStorageModeShared);
+                                   resourceOptions);
     }
     JST_ASSERT(buffer, "Failed to create buffer.");
 
