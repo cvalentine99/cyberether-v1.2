@@ -8,8 +8,8 @@ This document tracks all fixes and improvements applied during the current devel
 
 **Date:** November 18, 2025
 **Branch:** main
-**Commits Made:** 10
-**Files Modified:** 49
+**Commits Made:** 11
+**Files Modified:** 52
 **TODOs Resolved:** 46
 **Status:** ✅ All changes compiled and committed successfully
 
@@ -213,6 +213,35 @@ This document tracks all fixes and improvements applied during the current devel
 - Removed redundant loops and ensured CUDA kernel creation requests the tensor header
 
 **Impact:** ✅ CUDA kernels can now reuse tensor/window helpers, and arithmetic honors arbitrary strides
+
+---
+
+### 8. Share Tensor/Window Helpers Across CUDA Kernels
+**Commit:** `053e639`
+**Files Changed:** 3 files, 65 insertions(+), 31 deletions(-)
+
+#### Duplicate Kernel Stride Support (`src/modules/duplicate/cuda/base.cc`)
+**Problem:**
+- Kernel still recomputed coordinates manually and used `if (id > size)` bug (last thread wrote past end)
+
+**Solution:**
+- Included `jetstream_tensor.cuh`, reused shared indexing helpers, and fixed the off-by-one guard
+
+#### Lineplot Kernel Tensor View (`src/modules/lineplot/cuda/base.cc`)
+**Problem:**
+- Kernel dereferenced raw pointers assuming tightly packed buffers, ignoring multi-dimensional strides
+
+**Solution:**
+- Passed tensor metadata to the kernel, used shared helpers to fetch samples, and updated argument plumbing accordingly
+
+#### Spectrogram Window Weighting (`src/modules/spectrogram/cuda/base.cc`)
+**Problem:**
+- Spectrogram rise kernel ignored tap windows, leading to harsher bin transitions than CPU path
+
+**Solution:**
+- Included `jetstream_window.cuh` and used a Hann weighting when accumulating bins so GPU results match CPU smoothing
+
+**Impact:** ✅ CUDA visualization kernels now respect tensor strides and window tap behavior
 
 ---
 
