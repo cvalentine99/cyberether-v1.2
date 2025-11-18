@@ -246,7 +246,7 @@ This document tracks all fixes and improvements applied during the current devel
 ---
 
 ### 9. Improve Note/File Writer/Spectroscope/Waterfall UX
-**Commit:** `[PENDING]`
+**Commit:** `1f3e141`
 **Files Changed:** 4 files, 210 insertions(+), 48 deletions(-)
 
 #### Rich Markdown Editing (`include/jetstream/blocks/note.hh`)
@@ -270,7 +270,7 @@ This document tracks all fixes and improvements applied during the current devel
 **Solution:**
 - Added scroll-wheel zooming plus drag-to-pan gestures (with double-click reset) powered by the underlying module APIs, and reused the behavior inside the Spectroscope’s embedded waterfall view
 
-**Impact:** ⚠️ Pending commit (rebuilt locally) – documentation TODOs cleared and common visualization controls feel modern
+**Impact:** ✅ Documentation/UI TODOs cleared; rebuilt locally with `CCACHE_DISABLE=1 meson compile -C build`
 
 ---
 
