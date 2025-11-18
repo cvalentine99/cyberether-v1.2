@@ -3,6 +3,7 @@
 
 #include "jetstream/block.hh"
 #include "jetstream/instance.hh"
+#include "jetstream/render/tools/imgui_icons_ext.hh"
 
 namespace Jetstream::Blocks {
 
@@ -60,8 +61,9 @@ class Note : public Block {
     }
 
     std::string description() const {
-        // TODO: Add support for markdown with links and images.
-        return "Just a simple flowgraph note.";
+        return "Rich-text note widget that renders Markdown (including clickable links and inline images) directly "
+               "inside the flowgraph. Supports live editing, preview mode, and helper shortcuts for inserting common "
+               "Markdown elements so documentation can live alongside the signal chain.";
     }
 
     // Constructor
@@ -78,18 +80,25 @@ class Note : public Block {
 
     void drawPreview(const F32& maxWidth) {
         if (editing) {
+            ImGui::PushID(this);
+            drawMarkdownToolbar(maxWidth);
+
             const I32 numActualLines = std::count(config.note.begin(), config.note.end(), '\n');
             const I32 textHeight = std::min(std::max(5, numActualLines + 2) * ImGui::GetTextLineHeight(), 500.0f);
-            // TODO: Implement automatic line wrapping.
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + maxWidth);
             ImGui::InputTextMultiline("##note",
                                       &config.note,
                                       ImVec2(maxWidth, textHeight),
                                       ImGuiInputTextFlags_NoHorizontalScroll);
+            ImGui::PopTextWrapPos();
+            ImGui::PopID();
         } else {
             ImGui::SetNextWindowSizeConstraints(ImVec2(maxWidth, 50.0f), ImVec2(maxWidth, 500.0f));
             ImGui::BeginChild("##note-markdown", ImVec2(maxWidth, 0.0f), ImGuiChildFlags_AutoResizeY |
                                                                          ImGuiWindowFlags_NoBackground);
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + maxWidth);
             ImGui::Markdown(config.note.c_str(), config.note.length(), instance().compositor().markdownConfig());
+            ImGui::PopTextWrapPos();
             ImGui::EndChild();
         }
         if (ImGui::Button((editing) ? "Done" : "Edit", ImVec2(maxWidth, 0))) {
@@ -103,6 +112,63 @@ class Note : public Block {
 
  private:
     bool editing = false;
+    std::string pendingLinkText;
+    std::string pendingLinkUrl;
+    std::string pendingImageAlt;
+    std::string pendingImageUrl;
+
+    void insertMarkdown(const std::string& snippet) {
+        if (!snippet.empty()) {
+            config.note.append(snippet);
+        }
+    }
+
+    void drawMarkdownToolbar(const F32& maxWidth) {
+        const F32 buttonWidth = (maxWidth - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if (ImGui::Button(ICON_FA_LINK " Link", ImVec2(buttonWidth, 0))) {
+            ImGui::OpenPopup("note-insert-link");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button(ICON_FA_IMAGE " Image", ImVec2(buttonWidth, 0))) {
+            ImGui::OpenPopup("note-insert-image");
+        }
+
+        if (ImGui::BeginPopup("note-insert-link")) {
+            ImGui::InputText("Text", &pendingLinkText);
+            ImGui::InputText("URL", &pendingLinkUrl);
+            if (ImGui::Button("Insert")) {
+                if (!pendingLinkText.empty() && !pendingLinkUrl.empty()) {
+                    insertMarkdown(jst::fmt::format("[{}]({})", pendingLinkText, pendingLinkUrl));
+                    pendingLinkText.clear();
+                    pendingLinkUrl.clear();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        if (ImGui::BeginPopup("note-insert-image")) {
+            ImGui::InputText("Alt Text", &pendingImageAlt);
+            ImGui::InputText("URL", &pendingImageUrl);
+            if (ImGui::Button("Insert##Image")) {
+                if (!pendingImageUrl.empty()) {
+                    insertMarkdown(jst::fmt::format("![{}]({})", pendingImageAlt, pendingImageUrl));
+                    pendingImageAlt.clear();
+                    pendingImageUrl.clear();
+                    ImGui::CloseCurrentPopup();
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel##Image")) {
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+    }
 
     JST_DEFINE_IO()
 };

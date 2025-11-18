@@ -1,6 +1,8 @@
 #ifndef JETSTREAM_BLOCK_SPECTROSCOPE_BASE_HH
 #define JETSTREAM_BLOCK_SPECTROSCOPE_BASE_HH
 
+#include <limits>
+
 #include "jetstream/block.hh"
 #include "jetstream/instance.hh"
 #include "jetstream/modules/lineplot.hh"
@@ -357,7 +359,9 @@ class Spectroscope : public Block {
 
         if (waterfall) {
             auto [width, height] = waterfall->viewSize(blockSize);
-            ImGui::Image(ImTextureRef(waterfall->getTexture().raw()), ImVec2(width/scale.x, height/scale.y));
+            ImVec2 widgetSize(width/scale.x, height/scale.y);
+            ImGui::Image(ImTextureRef(waterfall->getTexture().raw()), widgetSize);
+            handleWaterfallGestures(scale);
         }
     }
 
@@ -369,6 +373,7 @@ class Spectroscope : public Block {
     U64 numberOfRows = 0;
     U64 numberOfVerticalLines = 20;
     U64 numberOfHorizontalLines = 5;
+    I32 waterfallDragAnchor = std::numeric_limits<I32>::min();
 
     std::shared_ptr<Jetstream::Window<D, IT>> window;
     std::shared_ptr<Jetstream::Invert<D, IT>> invert;
@@ -381,6 +386,36 @@ class Spectroscope : public Block {
     std::shared_ptr<Jetstream::Spectrogram<D, OT>> spectrogram;
     std::shared_ptr<Jetstream::Lineplot<D, OT>> lineplot;
     std::shared_ptr<Jetstream::Waterfall<D, OT>> waterfall;
+
+    void handleWaterfallGestures(const ImVec2& framebufferScale) {
+        if (!waterfall || !ImGui::IsItemHovered()) {
+            waterfallDragAnchor = std::numeric_limits<I32>::min();
+            return;
+        }
+
+        const auto& io = ImGui::GetIO();
+        if (io.MouseWheel != 0.0f) {
+            auto zoom = waterfall->zoom();
+            zoom = std::clamp(zoom + io.MouseWheel * 0.1f, 1.0f, 8.0f);
+            waterfall->zoom(zoom);
+        }
+
+        const F32 absoluteX = (ImGui::GetMousePos().x - ImGui::GetItemRectMin().x) * framebufferScale.x;
+        if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+            if (waterfallDragAnchor == std::numeric_limits<I32>::min()) {
+                waterfallDragAnchor = static_cast<I32>((absoluteX / waterfall->zoom()) + waterfall->offset());
+            }
+            const I32 newOffset = waterfallDragAnchor - static_cast<I32>(absoluteX / waterfall->zoom());
+            waterfall->offset(newOffset);
+        } else {
+            waterfallDragAnchor = std::numeric_limits<I32>::min();
+        }
+
+        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            waterfall->offset(0);
+            waterfall->zoom(1.0f);
+        }
+    }
 
     JST_DEFINE_IO()
 };

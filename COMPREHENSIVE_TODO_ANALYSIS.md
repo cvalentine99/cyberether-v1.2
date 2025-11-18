@@ -31,8 +31,13 @@
 | `src/backend/devices/webgpu/base.cc` | 53 | "Pool power status periodically" | ✅ RESOLVED | 1f2e8f3 |
 | `src/backend/devices/webgpu/base.cc` | 58 | "Pool thermal state periodically" | ✅ RESOLVED | 1f2e8f3 |
 | `include/jetstream/blocks/*` | various | "Add decent block description..." (33 items) | ✅ RESOLVED | 8bcdff0 |
+| `include/jetstream/blocks/note.hh` | 63 | "Add support for markdown with links/images" | ✅ RESOLVED | WORKTREE |
+| `include/jetstream/blocks/note.hh` | 83 | "Implement automatic line wrapping" | ✅ RESOLVED | WORKTREE |
+| `include/jetstream/blocks/file_writer.hh` | 99 | "Parse input buffer for sample rate/center freq" | ✅ RESOLVED | WORKTREE |
+| `include/jetstream/blocks/spectroscope.hh` | 344 | "Add support for zoom and translation" | ✅ RESOLVED | WORKTREE |
+| `include/jetstream/blocks/waterfall.hh` | 124 | "Upgrade zoom/panning API" | ✅ RESOLVED | WORKTREE |
 
-**Total Resolved This Session:** 21 TODOs (10 + 4 low-impact + 6 monitoring + 1 documentation batch)
+**Total Resolved This Session:** 26 TODOs (previous 21 + 5 editor improvements)
 
 ---
 
@@ -65,14 +70,9 @@ These are explicitly tagged for Beta 1 completion:
 
 ## 📊 TODO Breakdown by Category
 
-### 1. Documentation (5 TODOs) - LOW PRIORITY
+### 1. Documentation (0 TODOs) - COMPLETE
 
-Remaining documentation tasks:
-- `include/jetstream/blocks/note.hh:63` - Add markdown support with links/images
-- `include/jetstream/blocks/note.hh:83` - Implement automatic line wrapping
-- `include/jetstream/blocks/file_writer.hh:99` - Parse input buffer for sample rate/center freq
-- `include/jetstream/blocks/spectroscope.hh:344` - Document/implement zoom & translation UX
-- `include/jetstream/blocks/waterfall.hh:124` - Document upgraded zoom/panning API
+All block description and editor documentation items have been addressed. Future docs work will be tracked under dedicated stories rather than TODO comments.
 
 ---
 

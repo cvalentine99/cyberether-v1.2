@@ -245,6 +245,35 @@ This document tracks all fixes and improvements applied during the current devel
 
 ---
 
+### 9. Improve Note/File Writer/Spectroscope/Waterfall UX
+**Commit:** `[PENDING]`
+**Files Changed:** 4 files, 210 insertions(+), 48 deletions(-)
+
+#### Rich Markdown Editing (`include/jetstream/blocks/note.hh`)
+**Problem:**
+- TODOs called out missing Markdown link/image helpers and automatic wrapping while editing notes
+
+**Solution:**
+- Added a mini-toolbar with popups for inserting links and images, enabled wrap during editing/preview, and documented Markdown support in the block description
+
+#### Auto-detect Recording Metadata (`include/jetstream/blocks/file_writer.hh`)
+**Problem:**
+- File Writer required manual entry of sample rate/center frequency even when incoming tensors already carried metadata
+
+**Solution:**
+- Parse `sample_rate`, `center_frequency`, and `center` attributes from the input buffer before instantiating the module so recorded files inherit upstream metadata automatically
+
+#### Visualization Zoom/Pan (`include/jetstream/blocks/spectroscope.hh`, `include/jetstream/blocks/waterfall.hh`)
+**Problem:**
+- Spectroscope view and standalone Waterfall block had TODOs for zoom/pan interactions and relied on brittle drag math
+
+**Solution:**
+- Added scroll-wheel zooming plus drag-to-pan gestures (with double-click reset) powered by the underlying module APIs, and reused the behavior inside the Spectroscope’s embedded waterfall view
+
+**Impact:** ⚠️ Pending commit (rebuilt locally) – documentation TODOs cleared and common visualization controls feel modern
+
+---
+
 ### 8. Add Custom Formatter for Complex Numbers
 **Commit:** `445f89b`
 **Files Changed:** 2 files, 9 insertions(+), 12 deletions(-)

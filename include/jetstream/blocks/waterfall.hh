@@ -1,6 +1,8 @@
 #ifndef JETSTREAM_BLOCK_WATERFALL_BASE_HH
 #define JETSTREAM_BLOCK_WATERFALL_BASE_HH
 
+#include <limits>
+
 #include "jetstream/block.hh"
 #include "jetstream/instance.hh"
 #include "jetstream/modules/waterfall.hh"
@@ -123,15 +125,30 @@ class Waterfall : public Block {
         });
         ImGui::Image(ImTextureRef(waterfall->getTexture().raw()), ImVec2(width/scale.x, height/scale.y));
 
-        // TODO: Upgrade zoom and panning API.
-
-        if (ImGui::IsItemHovered() && ImGui::IsAnyMouseDown()) {
-            if (position == 0) {
-                position = (getRelativeMousePos().x / waterfall->zoom()) + waterfall->offset();
+        if (ImGui::IsItemHovered()) {
+            const auto& io = ImGui::GetIO();
+            if (io.MouseWheel != 0.0f) {
+                auto zoom = waterfall->zoom();
+                zoom = std::clamp(zoom + io.MouseWheel * 0.1f, 1.0f, 8.0f);
+                waterfall->zoom(zoom);
             }
-            waterfall->offset(position - (getRelativeMousePos().x / waterfall->zoom()));
+
+            const F32 relativeX = getRelativeMousePos().x;
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                if (dragAnchor == std::numeric_limits<I32>::min()) {
+                    dragAnchor = static_cast<I32>((relativeX / waterfall->zoom()) + waterfall->offset());
+                }
+                waterfall->offset(dragAnchor - static_cast<I32>(relativeX / waterfall->zoom()));
+            } else {
+                dragAnchor = std::numeric_limits<I32>::min();
+            }
+
+            if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                waterfall->offset(0);
+                waterfall->zoom(1.0f);
+            }
         } else {
-            position = 0;
+            dragAnchor = std::numeric_limits<I32>::min();
         }
     }
 
@@ -167,7 +184,7 @@ class Waterfall : public Block {
 
  private:
     std::shared_ptr<Jetstream::Waterfall<D, IT>> waterfall;
-    I32 position;
+    I32 dragAnchor = std::numeric_limits<I32>::min();
 
     ImVec2 getRelativeMousePos() {
         ImVec2 mousePositionAbsolute = ImGui::GetMousePos();

@@ -1,6 +1,8 @@
 #ifndef JETSTREAM_BLOCK_FILE_WRITER_BASE_HH
 #define JETSTREAM_BLOCK_FILE_WRITER_BASE_HH
 
+#include <optional>
+
 #include "jetstream/block.hh"
 #include "jetstream/instance.hh"
 #include "jetstream/modules/file_writer.hh"
@@ -81,6 +83,47 @@ class FileWriter : public Block {
     // Constructor
 
     Result create() {
+        auto applyInputMetadata = [&]() {
+            const auto& attrs = input.buffer.attributes();
+            auto getScalar = [&](const std::string& key) -> std::optional<F32> {
+                const auto it = attrs.find(key);
+                if (it == attrs.end() || !it->second.get().has_value()) {
+                    return std::nullopt;
+                }
+                try {
+                    return std::any_cast<const F32&>(it->second.get());
+                } catch (const std::bad_any_cast&) {
+                    return std::nullopt;
+                }
+            };
+            auto getVectorScalar = [&](const std::string& key) -> std::optional<F32> {
+                const auto it = attrs.find(key);
+                if (it == attrs.end() || !it->second.get().has_value()) {
+                    return std::nullopt;
+                }
+                try {
+                    const auto& values = std::any_cast<const std::vector<F32>&>(it->second.get());
+                    if (!values.empty()) {
+                        return values.front();
+                    }
+                } catch (const std::bad_any_cast&) {
+                }
+                return std::nullopt;
+            };
+
+            if (auto sampleRate = getScalar("sample_rate")) {
+                config.sampleRate = *sampleRate;
+            }
+            if (auto center = getScalar("center_frequency")) {
+                config.centerFrequency = *center;
+            } else if (auto centerVec = getVectorScalar("center")) {
+                config.centerFrequency = *centerVec;
+            } else if (auto freq = getScalar("frequency")) {
+                config.centerFrequency = *freq;
+            }
+        };
+        applyInputMetadata();
+
         JST_CHECK(instance().addModule(
             file_writer, "file_writer", {
                 .fileFormat = config.fileFormat,
