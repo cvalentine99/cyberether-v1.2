@@ -174,32 +174,49 @@ Result Instance::linkBlocks(Locale inputLocale, Locale outputLocale) {
     JST_DEBUG("[INSTANCE] Linking '{}' -> '{}'.", outputLocale, inputLocale);
 
     // Verify input parameters.
-    // TODO: Improve error messages.
 
     if (!_flowgraph.nodes().contains(inputLocale.block())) {
-        JST_ERROR("[INSTANCE] Link input block '{}' doesn't exist.", inputLocale);
+        JST_ERROR("[INSTANCE] Cannot link '{}' -> '{}': input block '{}' does not exist.",
+                  outputLocale, inputLocale, inputLocale.block());
         return Result::ERROR;
     }
 
     if (!_flowgraph.nodes().contains(outputLocale.block())) {
-        JST_ERROR("[INSTANCE] Link output block '{}' doesn't exist.", outputLocale);
+        JST_ERROR("[INSTANCE] Cannot link '{}' -> '{}': output block '{}' does not exist.",
+                  outputLocale, inputLocale, outputLocale.block());
         return Result::ERROR;
     }
 
     if (inputLocale.pinId.empty() || outputLocale.pinId.empty()) {
-        JST_ERROR("[INSTANCE] The Locale Pin ID of the input and output locale must be set.");
+        JST_ERROR("[INSTANCE] Cannot link '{}' -> '{}': both Locale pin IDs must be set.",
+                  outputLocale, inputLocale);
         return Result::ERROR;
     }
 
-    const auto& rawInputLocale = _flowgraph.nodes().at(inputLocale.block())->inputMap.at(inputLocale.pinId).locale;
+    const auto& inputNode = _flowgraph.nodes().at(inputLocale.block());
+    if (!inputNode->inputMap.contains(inputLocale.pinId)) {
+        JST_ERROR("[INSTANCE] Input block '{}' does not expose pin '{}'.",
+                  inputLocale.block(), inputLocale.pinId);
+        return Result::ERROR;
+    }
+
+    const auto& outputNode = _flowgraph.nodes().at(outputLocale.block());
+    if (!outputNode->outputMap.contains(outputLocale.pinId)) {
+        JST_ERROR("[INSTANCE] Output block '{}' does not expose pin '{}'.",
+                  outputLocale.block(), outputLocale.pinId);
+        return Result::ERROR;
+    }
+
+    const auto& rawInputLocale = inputNode->inputMap.at(inputLocale.pinId).locale;
     if (rawInputLocale.block() == outputLocale.block()) {
         JST_ERROR("[INSTANCE] Link '{}' -> '{}' already exists.", outputLocale, inputLocale);
         return Result::ERROR;
     }
 
-    const auto& inputRecordMap = _flowgraph.nodes().at(inputLocale.block())->inputMap;
-    if (inputRecordMap.contains(inputLocale.pinId) && inputRecordMap.at(inputLocale.pinId).hash != 0) {
-        JST_ERROR("[INSTANCE] Input '{}' is already linked with something else.", inputLocale);
+    const auto& inputRecord = inputNode->inputMap.at(inputLocale.pinId);
+    if (inputRecord.hash != 0) {
+        JST_ERROR("[INSTANCE] Input '{}' is already linked with '{}'.",
+                  inputLocale, inputRecord.locale);
         return Result::ERROR;
     }
 

@@ -421,6 +421,17 @@ Result Text::Impl::updateElementVertex(Element& element) {
     std::fill(element.fillVertices.begin(), element.fillVertices.end(), glm::vec2(0.0f));
 
     // Recalculate vertex buffer.
+    const F32 fontSize = config.font->getConfig().size;
+    const auto& atlasSize = config.font->atlasSize();
+
+    struct GlyphPlacement {
+        F32 penX;
+        F32 penY;
+        const Render::Components::Font::Glyph* glyph;
+    };
+
+    std::vector<GlyphPlacement> glyphPlacements;
+    glyphPlacements.reserve(element.config.fill.size());
 
     F32 x = 0.0f;
     F32 y = 0.0f;
@@ -429,21 +440,31 @@ Result Text::Impl::updateElementVertex(Element& element) {
     I32 miny = 0;
 
     for (const auto& c : element.config.fill) {
-        if (c >= 32 && c < 127) {
-            if (c == ' ') {
-                continue;
-            }
-
-            // TODO: Check if there is no better way to do this.
-            const auto& b = config.font->glyph(c - 32);
-            minx = std::min(minx, static_cast<I32>(x + b.xOffset));
-            miny = std::max(miny, static_cast<I32>(y - b.yOffset));
+        if (c < 32 || c >= 127) {
+            continue;
         }
+
+        if (c == ' ') {
+            x += (fontSize / 2.0f);
+            continue;
+        }
+
+        const auto& glyph = config.font->glyph(c - 32);
+        glyphPlacements.push_back({
+            .penX = x,
+            .penY = y,
+            .glyph = &glyph,
+        });
+
+        minx = std::min(minx, static_cast<I32>(x + glyph.xOffset));
+        miny = std::max(miny, static_cast<I32>(y - glyph.yOffset));
+        x += glyph.xAdvance;
     }
 
+    size_t glyphIndex = 0;
+    x = 0.0f;
+
     for (U64 i = 0; i < element.config.fill.size(); i++) {
-        const auto& fontSize = config.font->getConfig().size;
-        const auto& atlasSize = config.font->atlasSize();
         const auto& c = element.config.fill[i];
 
         if (c >= 32 && c < 127) {
@@ -452,12 +473,13 @@ Result Text::Impl::updateElementVertex(Element& element) {
                 continue;
             }
 
-            const auto& b = config.font->glyph(c - 32);
+            const auto& placement = glyphPlacements[glyphIndex++];
+            const auto* glyph = placement.glyph;
 
-            F32 x0 = x + b.xOffset - minx;
-            F32 y0 = y - b.yOffset - miny;
-            F32 x1 = x0 + (b.x1 - b.x0);
-            F32 y1 = y0 - (b.y1 - b.y0);
+            F32 x0 = placement.penX + glyph->xOffset - minx;
+            F32 y0 = placement.penY - glyph->yOffset - miny;
+            F32 x1 = x0 + (glyph->x1 - glyph->x0);
+            F32 y1 = y0 - (glyph->y1 - glyph->y0);
 
             // Add positions.
 
@@ -468,10 +490,10 @@ Result Text::Impl::updateElementVertex(Element& element) {
 
             // Normalize texture coordinates.
 
-            F32 s0 = b.x0 / static_cast<F32>(atlasSize.x);
-            F32 t0 = b.y0 / static_cast<F32>(atlasSize.y);
-            F32 s1 = b.x1 / static_cast<F32>(atlasSize.x);
-            F32 t1 = b.y1 / static_cast<F32>(atlasSize.y);
+            F32 s0 = glyph->x0 / static_cast<F32>(atlasSize.x);
+            F32 t0 = glyph->y0 / static_cast<F32>(atlasSize.y);
+            F32 s1 = glyph->x1 / static_cast<F32>(atlasSize.x);
+            F32 t1 = glyph->y1 / static_cast<F32>(atlasSize.y);
 
             // Add texture coordinates.
 
@@ -482,11 +504,11 @@ Result Text::Impl::updateElementVertex(Element& element) {
 
             // Update horizontal position.
 
-            x += b.xAdvance;
+            x += glyph->xAdvance;
 
             // Save text height.
 
-            element.bounds.y = std::max(element.bounds.y, static_cast<I32>(b.y1 - b.y0));
+            element.bounds.y = std::max(element.bounds.y, static_cast<I32>(glyph->y1 - glyph->y0));
         }
     }
 
