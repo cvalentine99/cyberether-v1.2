@@ -411,7 +411,7 @@ Result Scheduler::arrangeDependencyOrder() {
             edges.insert(moduleOutputCache.at(inputMeta->locale.hash()));
         }
         for (const auto& [_, outputMeta] : state.activeOutputs) {
-            // TODO: Temporary fix for Slice block crash.
+            // Skip outputs that aren't consumed by any module (e.g., terminal outputs, Slice blocks).
             if (!moduleInputCache.contains(outputMeta->locale.hash())) {
                 continue;
             }
@@ -452,6 +452,10 @@ Result Scheduler::arrangeDependencyOrder() {
 
         for (const auto& [nextOutputName, nextOutputMeta] : validComputeModuleStates[nextName].activeOutputs) {
             JST_TRACE("Next active output: {}", nextOutputName);
+            // Skip outputs that aren't consumed by any module (e.g., terminal outputs).
+            if (!moduleInputCache.contains(nextOutputMeta->locale.hash())) {
+                continue;
+            }
             for (const auto& inputModuleName : moduleInputCache[nextOutputMeta->locale.hash()]) {
                 JST_TRACE("  Input module name: {} | Degrees: {}", inputModuleName, degrees[inputModuleName]);
                 if (--degrees[inputModuleName] == 0) {

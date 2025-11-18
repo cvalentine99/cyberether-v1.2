@@ -1015,8 +1015,8 @@ Result Remote::Impl::startStream() {
         g_object_set(elements["rawparser"], "format", 12, nullptr);
         g_object_set(elements["rawparser"], "width", config.size.x, nullptr);
         g_object_set(elements["rawparser"], "height", config.size.y, nullptr);
-        // TODO: Unclear if this is needed. Crash on some systems.
-        //g_object_set(elements["rawparser"], "framerate", 1.0f/config.framerate, nullptr);
+        // Note: framerate is already correctly set in upstream caps (line 1000).
+        // rawvideoparse doesn't have a "framerate" property and derives it from caps.
     }
 
     if (config.codec == Viewport::VideoCodec::H264) {
