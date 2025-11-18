@@ -18,8 +18,9 @@ class Audio : public Block {
         std::string deviceName = "Default";
         F32 inSampleRate = 48e3;
         F32 outSampleRate = 48e3;
+        U32 channels = 1;
 
-        JST_SERDES(deviceName, inSampleRate, outSampleRate);
+        JST_SERDES(deviceName, inSampleRate, outSampleRate, channels);
     };
 
     constexpr const Config& getConfig() const {
@@ -93,6 +94,7 @@ class Audio : public Block {
                 .deviceName = config.deviceName,
                 .inSampleRate = config.inSampleRate,
                 .outSampleRate = config.outSampleRate,
+                .channels = config.channels,
             }, {
                 .buffer = input.buffer,
             },
@@ -122,6 +124,23 @@ class Audio : public Block {
         F32 inSampleRate = config.inSampleRate / 1e6f;
         if (ImGui::InputFloat("##in-sample-rate", &inSampleRate, 0.1f, 0.2f, "%.3f MHz", ImGuiInputTextFlags_EnterReturnsTrue)) {
             config.inSampleRate = inSampleRate * 1e6;
+
+            JST_DISPATCH_ASYNC([&](){
+                ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+                JST_CHECK_NOTIFY(instance().reloadBlock(locale()));
+            });
+        }
+
+        ImGui::TableNextRow();
+        ImGui::TableSetColumnIndex(0);
+        ImGui::TextUnformatted("Channels");
+        ImGui::TableSetColumnIndex(1);
+        ImGui::SetNextItemWidth(-1);
+        int channels = static_cast<int>(config.channels);
+        if (ImGui::InputInt("##channels", &channels, 1, 2, ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (channels < 1) channels = 1;
+            if (channels > 8) channels = 8;  // Reasonable limit for most audio devices
+            config.channels = static_cast<U32>(channels);
 
             JST_DISPATCH_ASYNC([&](){
                 ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });

@@ -222,7 +222,7 @@ Result Audio<D, T>::create() {
 
     pimpl->resamplerConfig = ma_resampler_config_init(
         ma_format_f32,
-        1,
+        config.channels,
         static_cast<U32>(config.inSampleRate),
         static_cast<U32>(config.outSampleRate),
         ma_resample_algorithm_linear
@@ -271,7 +271,7 @@ Result Audio<D, T>::create() {
     pimpl->deviceConfig = ma_device_config_init(ma_device_type_playback);
     pimpl->deviceConfig.playback.pDeviceID = (!foundConfigDevice || useDefaultDevice) ? nullptr : &selectedDeviceId;
     pimpl->deviceConfig.playback.format    = ma_format_f32;
-    pimpl->deviceConfig.playback.channels  = 1;  // TODO: Support for more channels.
+    pimpl->deviceConfig.playback.channels  = config.channels;
     pimpl->deviceConfig.sampleRate         = static_cast<U32>(config.outSampleRate);
     pimpl->deviceConfig.dataCallback       = Impl::callback;
     pimpl->deviceConfig.pUserData          = pimpl.get();
@@ -316,6 +316,7 @@ void Audio<D, T>::info() const {
     JST_DEBUG("  Device Name:        {}", config.deviceName);
     JST_DEBUG("  Input Sample Rate:  {:.2f} kHz", config.inSampleRate / 1000);
     JST_DEBUG("  Output Sample Rate: {:.2f} kHz", config.outSampleRate / 1000);
+    JST_DEBUG("  Channels:           {}", config.channels);
 }
 
 template<Device D, typename T>

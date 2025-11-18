@@ -29,8 +29,9 @@ class Audio : public Module, public Compute {
         std::string deviceName = "Default";
         F32 inSampleRate = 48e3;
         F32 outSampleRate = 48e3;
+        U32 channels = 1;
 
-        JST_SERDES(deviceName, inSampleRate, outSampleRate);
+        JST_SERDES(deviceName, inSampleRate, outSampleRate, channels);
     };
 
     constexpr const Config& getConfig() const {
