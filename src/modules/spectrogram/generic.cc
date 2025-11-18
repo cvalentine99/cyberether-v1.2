@@ -84,7 +84,7 @@ Result Spectrogram<D, T>::createPresent() {
                                  U64 elementSize,
                                  Render::Buffer::Target target) -> Result {
         Render::Buffer::Config cfg;
-        cfg.buffer = data;
+        cfg.buffer = const_cast<void*>(data);
         cfg.elementByteSize = elementSize;
         cfg.size = count;
         cfg.target = target;

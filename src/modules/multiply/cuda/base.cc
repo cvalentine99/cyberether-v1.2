@@ -119,7 +119,7 @@ Result Multiply<D, T>::compute(const Context& ctx) {
             tensor = &fallback;
         }
 
-        meta.ptr = reinterpret_cast<uint8_t*>(tensor->data()) + tensor->offset_bytes();
+        meta.ptr = const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(tensor->data())) + tensor->offset_bytes();
         meta.rank = tensor->rank();
         for (size_t i = 0; i < tensor->rank(); ++i) {
             meta.shape[i] = tensor->shape()[i];
@@ -144,7 +144,7 @@ Result Multiply<D, T>::compute(const Context& ctx) {
         copyBack = true;
     }
 
-    impl->productMeta.ptr = reinterpret_cast<uint8_t*>(productTensor->data()) + productTensor->offset_bytes();
+    impl->productMeta.ptr = const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(productTensor->data())) + productTensor->offset_bytes();
     impl->productMeta.rank = productTensor->rank();
     for (size_t i = 0; i < productTensor->rank(); ++i) {
         impl->productMeta.shape[i] = productTensor->shape()[i];

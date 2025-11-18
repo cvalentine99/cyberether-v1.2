@@ -151,12 +151,8 @@ Result Duplicate<D, T>::compute(const Context& ctx) {
     }
 
     auto refreshMeta = [](auto& meta, const auto& tensor) {
-        meta = {
-            reinterpret_cast<uint8_t*>(tensor.data()) + tensor.offset_bytes(),
-            tensor.rank(),
-            {},
-            {},
-        };
+        meta.ptr = const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(tensor.data())) + tensor.offset_bytes();
+        meta.rank = tensor.rank();
 
         for (U64 i = 0; i < tensor.rank(); i++) {
             meta.shape[i] = tensor.shape()[i];
