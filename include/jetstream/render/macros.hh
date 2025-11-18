@@ -8,13 +8,13 @@
 #define JST_CHECK_NOTIFY(...) { \
     Result val = (__VA_ARGS__); \
     if (val == Result::ERROR) { \
-        ImGui::InsertNotification({ ImGuiToastType_Error, 5000, JST_LOG_LAST_ERROR().c_str() }); \
+        /* ImGui::InsertNotification({ ImGuiToastType_Error, 5000, JST_LOG_LAST_ERROR().c_str() }); */ \
     } else if (val == Result::FATAL) { \
-        ImGui::InsertNotification({ ImGuiToastType_Error, 5000, JST_LOG_LAST_FATAL().c_str() }); \
+        /* ImGui::InsertNotification({ ImGuiToastType_Error, 5000, JST_LOG_LAST_FATAL().c_str() }); */ \
     } else if (val == Result::WARNING) { \
-        ImGui::InsertNotification({ ImGuiToastType_Warning, 5000, JST_LOG_LAST_WARNING().c_str() }); \
+        /* ImGui::InsertNotification({ ImGuiToastType_Warning, 5000, JST_LOG_LAST_WARNING().c_str() }); */ \
     } else if (val == Result::SUCCESS) { \
-        ImGui::InsertNotification({ ImGuiToastType_Success, 1000, "" }); \
+        /* ImGui::InsertNotification({ ImGuiToastType_Success, 1000, "" }); */ \
     } else { \
         JST_CHECK_THROW(Result::ERROR); \
     } \
@@ -26,17 +26,17 @@
     Result val = _MOD->__VA_ARGS__; \
     if (val == Result::RELOAD) { \
         JST_DISPATCH_ASYNC([&](){ \
-            ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." }); \
+            /* ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." }); */ \
             JST_CHECK_NOTIFY(instance().reloadBlock(locale())); \
         }); \
     } else if (val == Result::ERROR) { \
-        ImGui::InsertNotification({ ImGuiToastType_Error, 5000, JST_LOG_LAST_ERROR().c_str() }); \
+        /* ImGui::InsertNotification({ ImGuiToastType_Error, 5000, JST_LOG_LAST_ERROR().c_str() }); */ \
     } else if (val == Result::FATAL) { \
-        ImGui::InsertNotification({ ImGuiToastType_Error, 5000, JST_LOG_LAST_FATAL().c_str() }); \
+        /* ImGui::InsertNotification({ ImGuiToastType_Error, 5000, JST_LOG_LAST_FATAL().c_str() }); */ \
     } else if (val == Result::WARNING) { \
-        ImGui::InsertNotification({ ImGuiToastType_Warning, 5000, JST_LOG_LAST_WARNING().c_str() }); \
+        /* ImGui::InsertNotification({ ImGuiToastType_Warning, 5000, JST_LOG_LAST_WARNING().c_str() }); */ \
     } else if (val == Result::SUCCESS) { \
-        ImGui::InsertNotification({ ImGuiToastType_Success, 1000, "" }); \
+        /* ImGui::InsertNotification({ ImGuiToastType_Success, 1000, "" }); */ \
     } else { \
         JST_CHECK_THROW(Result::ERROR); \
     } \

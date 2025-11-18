@@ -1,5 +1,6 @@
 #include "jetstream/compositor.hh"
 #include "jetstream/instance.hh"
+#include "jetstream/render/tools/imnodes.h"
 
 namespace Jetstream {
 

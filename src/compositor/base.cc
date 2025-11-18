@@ -5,6 +5,8 @@
 #include "jetstream/instance.hh"
 #include "jetstream/store.hh"
 #include "jetstream/platform.hh"
+#include "jetstream/render/tools/imnodes.h"
+#include "jetstream/render/tools/imgui_icons_ext.hh"
 
 #include <stb_image.h>
 #include "resources/images/base.hh"
@@ -17,25 +19,27 @@
 
 namespace Jetstream {
 
+using NodeId = CompositorDetail::NodeId;
+using LinkId = CompositorDetail::LinkId;
+using PinId = CompositorDetail::PinId;
+
+// Color constants from CompositorStyling
+constexpr auto DefaultColor = CompositorStyling::DefaultColor;
+constexpr auto DisabledColor = CompositorStyling::DisabledColors::normal;
+constexpr auto DisabledColorSelected = CompositorStyling::DisabledColors::selected;
+constexpr auto CPUColor = CompositorStyling::CPUColors::normal;
+constexpr auto CPUColorSelected = CompositorStyling::CPUColors::selected;
+constexpr auto CUDAColor = CompositorStyling::CUDAColors::normal;
+constexpr auto CUDAColorSelected = CompositorStyling::CUDAColors::selected;
+constexpr auto MetalColor = CompositorStyling::MetalColors::normal;
+constexpr auto MetalColorSelected = CompositorStyling::MetalColors::selected;
+constexpr auto VulkanColor = CompositorStyling::VulkanColors::normal;
+constexpr auto VulkanColorSelected = CompositorStyling::VulkanColors::selected;
+constexpr auto WebGPUColor = CompositorStyling::WebGPUColors::normal;
+constexpr auto WebGPUColorSelected = CompositorStyling::WebGPUColors::selected;
+
 Compositor::Compositor(Instance& instance)
-     : instance(instance),
-       running(true),
-       nodeDragId(0),
-       graphSpatiallyOrganized(false),
-       rightClickMenuEnabled(false),
-       sourceEditorEnabled(false),
-       moduleStoreEnabled(true),
-       infoPanelEnabled(true),
-       flowgraphEnabled(true),
-       debugDemoEnabled(false),
-       debugLatencyEnabled(false),
-       debugViewportEnabled(false),
-       fullscreenEnabled(false),
-       debugEnableTrace(false),
-       globalModalContentId(0),
-       nodeContextMenuNodeId(0),
-       benchmarkRunning(false),
-       globalModalToggle(false) {
+     : instance(instance) {
     JST_DEBUG("[COMPOSITOR] Creating compositor.");
 
     // Load ImGui fonts.
@@ -57,8 +61,8 @@ Compositor::Compositor(Instance& instance)
 
     ImGuiMarkdownStyleSetup();
 
-    // Set default stacks.
-    stacks["Graph"] = {true, 0};
+    // Set default graph.stacks.
+    graph.stacks["Graph"] = {true, 0};
 
     // Initialize state.
     JST_CHECK_THROW(refreshState());
@@ -67,17 +71,17 @@ Compositor::Compositor(Instance& instance)
 
     JST_CHECK_THROW(loadImageAsset(Resources::compositor_banner_primary_bin,
                                   Resources::compositor_banner_primary_len,
-                                  primaryBannerTexture));
+                                  state.primaryBannerTexture));
     JST_CHECK_THROW(loadImageAsset(Resources::compositor_banner_secondary_bin,
                                    Resources::compositor_banner_secondary_len,
-                                   secondaryBannerTexture));
+                                   state.secondaryBannerTexture));
 }
 
 Compositor::~Compositor() {
     // Destroy assets.
 
-    primaryBannerTexture->destroy();
-    secondaryBannerTexture->destroy();
+    state.primaryBannerTexture->destroy();
+    state.secondaryBannerTexture->destroy();
 
     // Destroy ImNodes.
 
@@ -92,22 +96,22 @@ Result Compositor::addBlock(const Locale& locale,
                             const Block::Fingerprint& fingerprint) {
     JST_DEBUG("[COMPOSITOR] Adding block '{}'.", locale);
 
-    // Make sure compositor is running.
-    running = true;
-    globalModalToggle = false;
+    // Make sure compositor is state.running.
+    state.running = true;
+    state.globalModalToggle = false;
 
     // Check if the locale is already created.
-    if (nodeStates.contains(locale)) {
+    if (graph.nodeStates.contains(locale)) {
         JST_ERROR("[COMPOSITOR] Entry for node '{}' already exists.", locale);
         return Result::ERROR;
     }
 
-    // Prevent drawMainInterface from running.
+    // Prevent drawMainInterface from state.running.
     lock();
 
     // Save block in node state.
 
-    auto& nodeState = nodeStates[locale];
+    auto& nodeState = graph.nodeStates[locale];
 
     nodeState.block = block;
     nodeState.inputMap = inputMap;
@@ -127,22 +131,22 @@ Result Compositor::addBlock(const Locale& locale,
 Result Compositor::removeBlock(const Locale& locale) {
     JST_DEBUG("[COMPOSITOR] Removing block '{}'.", locale);
 
-    // Return early if the scheduler is not running.
-    if (!running) {
+    // Return early if the scheduler is not state.running.
+    if (!state.running) {
         return Result::SUCCESS;
     }
 
     // Check if the locale is already created.
-    if (!nodeStates.contains(locale)) {
+    if (!graph.nodeStates.contains(locale)) {
         JST_ERROR("[COMPOSITOR] Entry for node '{}' doesn't exist.", locale);
         return Result::ERROR;
     }
 
-    // Prevent drawMainInterface from running.
+    // Prevent drawMainInterface from state.running.
     lock();
 
     // Save block in node state.
-    nodeStates.erase(locale);
+    graph.nodeStates.erase(locale);
 
     JST_CHECK(refreshState());
 
@@ -156,17 +160,17 @@ Result Compositor::refreshState() {
     JST_DEBUG("[COMPOSITOR] Refreshing interface state.");
 
     // Create interface state, input, output and pin cache.
-    pinLocaleMap.clear();
-    nodeLocaleMap.clear();
-    inputLocalePinMap.clear();
-    outputLocalePinMap.clear();
-    outputInputCache.clear();
+    graph.pinLocaleMap.clear();
+    graph.nodeLocaleMap.clear();
+    graph.inputLocalePinMap.clear();
+    graph.outputLocalePinMap.clear();
+    graph.outputInputCache.clear();
 
     U64 id = 1;
-    for (auto& [locale, state] : nodeStates) {
+    for (auto& [locale, state] : graph.nodeStates) {
         // Generate id for node.
         state.id = id;
-        nodeLocaleMap[id++] = locale;
+        graph.nodeLocaleMap[id++] = locale;
 
         // Cleanup and create pin map and convert locale to interface locale.
 
@@ -178,8 +182,8 @@ Result Compositor::refreshState() {
             const Locale& inputLocale = {locale.blockId, "", inputPinId};
 
             // Save the input pin locale.
-            pinLocaleMap[id] = inputLocale;
-            inputLocalePinMap[inputLocale] = id;
+            graph.pinLocaleMap[id] = inputLocale;
+            graph.inputLocalePinMap[inputLocale] = id;
 
             // Generate clean locale.
             const Locale& outputLocale = inputRecord.locale.pin();
@@ -188,7 +192,7 @@ Result Compositor::refreshState() {
             state.inputs[id++] = outputLocale;
 
             // Save the output to input locale map cache.
-            outputInputCache[outputLocale].push_back(inputLocale);
+            graph.outputInputCache[outputLocale].push_back(inputLocale);
         }
 
         for (const auto& [outputPinId, outputRecord] : state.outputMap) {
@@ -196,8 +200,8 @@ Result Compositor::refreshState() {
             const Locale& outputLocale = {locale.blockId, "", outputPinId};
 
             // Save the output pin locale.
-            pinLocaleMap[id] = outputLocale;
-            outputLocalePinMap[outputLocale] = id;
+            graph.pinLocaleMap[id] = outputLocale;
+            graph.outputLocalePinMap[outputLocale] = id;
 
             // Save the outgoing output locale.
             state.outputs[id++] = outputLocale;
@@ -205,24 +209,24 @@ Result Compositor::refreshState() {
     }
 
     // Create link and edges.
-    linkLocaleMap.clear();
+    graph.linkLocaleMap.clear();
 
     U64 linkId = 0;
-    for (auto& [locale, state] : nodeStates) {
+    for (auto& [locale, state] : graph.nodeStates) {
         // Cleanup buffers.
         state.edges.clear();
 
         for (const auto& [_, inputLocale] : state.inputs) {
-            if (nodeStates.contains(inputLocale.block())) {
-                state.edges.insert(nodeStates.at(inputLocale.block()).id);
+            if (graph.nodeStates.contains(inputLocale.block())) {
+                state.edges.insert(graph.nodeStates.at(inputLocale.block()).id);
             }
         }
 
         for (const auto& [_, outputLocale] : state.outputs) {
-            for (const auto& inputLocale : outputInputCache[outputLocale]) {
-                state.edges.insert(nodeStates.at(inputLocale.block()).id);
+            for (const auto& inputLocale : graph.outputInputCache[outputLocale]) {
+                state.edges.insert(graph.nodeStates.at(inputLocale.block()).id);
 
-                linkLocaleMap[linkId++] = {inputLocale, outputLocale};
+                graph.linkLocaleMap[linkId++] = {inputLocale, outputLocale};
             }
         }
     }
@@ -234,7 +238,7 @@ Result Compositor::checkAutoLayoutState() {
     JST_DEBUG("[COMPOSITOR] Checking auto layout state.");
 
     bool graphHasPos = false;
-    for (const auto& [_, state] : nodeStates) {
+    for (const auto& [_, state] : graph.nodeStates) {
         if (state.block->getState().nodePos != Extent2D<F32>{0.0f, 0.0f}) {
             graphHasPos = true;
         }
@@ -250,13 +254,13 @@ Result Compositor::checkAutoLayoutState() {
 Result Compositor::updateAutoLayoutState() {
     JST_DEBUG("[COMPOSITOR] Updating auto layout state.");
 
-    graphSpatiallyOrganized = false;
+    state.graphSpatiallyOrganized = false;
 
     // Separate graph in sub-graphs if applicable.
     U64 clusterCount = 0;
     std::unordered_set<NodeId> visited;
 
-    for (const auto& [nodeId, _] : nodeLocaleMap) {
+    for (const auto& [nodeId, _] : graph.nodeLocaleMap) {
         if (visited.contains(nodeId)) {
             continue;
         }
@@ -273,7 +277,7 @@ Result Compositor::updateAutoLayoutState() {
             }
 
             visited.insert(current);
-            auto& state = nodeStates.at(nodeLocaleMap.at(current));
+            auto& state = graph.nodeStates.at(graph.nodeLocaleMap.at(current));
             state.clusterLevel = clusterCount;
             for (const auto& neighbor : state.edges) {
                 if (!visited.contains(neighbor)) {
@@ -285,13 +289,13 @@ Result Compositor::updateAutoLayoutState() {
     }
 
     // Create automatic graph layout.
-    nodeTopology.clear();
+    graph.nodeTopology.clear();
 
     U64 columnId = 0;
     std::unordered_set<NodeId> S;
 
-    for (const auto& [nodeId, nodeLocale] : nodeLocaleMap) {
-        if (nodeStates.at(nodeLocale).inputs.size() == 0) {
+    for (const auto& [nodeId, nodeLocale] : graph.nodeLocaleMap) {
+        if (graph.nodeStates.at(nodeLocale).inputs.size() == 0) {
             S.insert(nodeId);
         }
     }
@@ -303,7 +307,7 @@ Result Compositor::updateAutoLayoutState() {
 
         // Build the matches map.
         for (const auto& sourceNodeId : S) {
-            const auto& outputList = nodeStates.at(nodeLocaleMap.at(sourceNodeId)).outputs;
+            const auto& outputList = graph.nodeStates.at(graph.nodeLocaleMap.at(sourceNodeId)).outputs;
 
             if (outputList.empty()) {
                 nodesToInsert.insert(sourceNodeId);
@@ -311,7 +315,7 @@ Result Compositor::updateAutoLayoutState() {
             }
 
             for (const auto& [_, outputLocale] : outputList) {
-                const auto& inputList = outputInputCache.at(outputLocale);
+                const auto& inputList = graph.outputInputCache.at(outputLocale);
 
                 if (inputList.empty()) {
                     nodesToInsert.insert(sourceNodeId);
@@ -319,7 +323,7 @@ Result Compositor::updateAutoLayoutState() {
                 }
 
                 for (const auto& inputLocale : inputList) {
-                    nodeMatches[nodeStates.at(inputLocale.block()).id].insert(sourceNodeId);
+                    nodeMatches[graph.nodeStates.at(inputLocale.block()).id].insert(sourceNodeId);
                 }
             }
         }
@@ -329,7 +333,7 @@ Result Compositor::updateAutoLayoutState() {
         // Determine which nodes to insert and which to exclude.
         for (const auto& [targetNodeId, sourceNodes] : nodeMatches) {
             U64 inputCount = 0;
-            for (const auto& [_, locale] : nodeStates.at(nodeLocaleMap.at(targetNodeId)).inputs) {
+            for (const auto& [_, locale] : graph.nodeStates.at(graph.nodeLocaleMap.at(targetNodeId)).inputs) {
                 if (!locale.empty()) {
                     inputCount += 1;
                 }
@@ -353,14 +357,14 @@ Result Compositor::updateAutoLayoutState() {
         }
 
         for (const auto& nodeId : nodesToInsert) {
-            const U64& clusterId = nodeStates.at(nodeLocaleMap[nodeId]).clusterLevel;
-            if (nodeTopology.size() <= clusterId) {
-                nodeTopology.resize(clusterId + 1);
+            const U64& clusterId = graph.nodeStates.at(graph.nodeLocaleMap[nodeId]).clusterLevel;
+            if (graph.nodeTopology.size() <= clusterId) {
+                graph.nodeTopology.resize(clusterId + 1);
             }
-            if (nodeTopology.at(clusterId).size() <= columnId) {
-                nodeTopology[clusterId].resize(columnId + 1);
+            if (graph.nodeTopology.at(clusterId).size() <= columnId) {
+                graph.nodeTopology[clusterId].resize(columnId + 1);
             }
-            nodeTopology[clusterId][columnId].push_back(nodeId);
+            graph.nodeTopology[clusterId][columnId].push_back(nodeId);
             S.erase(nodeId);
         }
 
@@ -374,49 +378,49 @@ Result Compositor::destroy() {
     JST_DEBUG("[COMPOSITOR] Destroying compositor.");
 
     // Stop execution.
-    running = false;
+    state.running = false;
 
     // Acquire lock.
     lock();
 
     // Reseting variables.
 
-    rightClickMenuEnabled = false;
-    graphSpatiallyOrganized = false;
-    sourceEditorEnabled = false;
-    moduleStoreEnabled = true;
-    debugDemoEnabled = false;
-    debugLatencyEnabled = false;
-    debugViewportEnabled = false;
-    flowgraphEnabled = true;
-    infoPanelEnabled = true;
-    globalModalContentId = 0;
-    nodeContextMenuNodeId = 0;
-    flowgraphFilename = {};
-    flowgraphBlob = {};
+    state.rightClickMenuEnabled = false;
+    state.graphSpatiallyOrganized = false;
+    state.sourceEditorEnabled = false;
+    state.moduleStoreEnabled = true;
+    state.debugDemoEnabled = false;
+    state.debugLatencyEnabled = false;
+    state.debugViewportEnabled = false;
+    state.flowgraphEnabled = true;
+    state.infoPanelEnabled = true;
+    state.globalModalContentId = 0;
+    state.nodeContextMenuNodeId = 0;
+    state.flowgraphFilename = {};
+    state.flowgraphBlob = {};
 
     // Clearing buffers.
 
-    linkLocaleMap.clear();
-    inputLocalePinMap.clear();
-    outputLocalePinMap.clear();
-    pinLocaleMap.clear();
-    nodeLocaleMap.clear();
-    stacks.clear();
-    nodeTopology.clear();
-    outputInputCache.clear();
-    nodeStates.clear();
+    graph.linkLocaleMap.clear();
+    graph.inputLocalePinMap.clear();
+    graph.outputLocalePinMap.clear();
+    graph.pinLocaleMap.clear();
+    graph.nodeLocaleMap.clear();
+    graph.stacks.clear();
+    graph.nodeTopology.clear();
+    graph.outputInputCache.clear();
+    graph.nodeStates.clear();
 
     // Add static.
-    stacks["Graph"] = {true, 0};
+    graph.stacks["Graph"] = {true, 0};
 
     // Release lock.
     unlock();
 
     // Reseting locks.
 
-    interfaceHalt.clear();
-    interfaceHalt.notify_all();
+    state.interfaceHalt.clear();
+    state.interfaceHalt.notify_all();
 
     return Result::SUCCESS;
 }
@@ -455,15 +459,15 @@ Result Compositor::loadImageAsset(const uint8_t* binary_data,
 Result Compositor::draw() {
     // Prevent state from refreshing while drawing these methods.
 
-    interfaceHalt.wait(true);
-    interfaceHalt.test_and_set();
+    state.interfaceHalt.wait(true);
+    state.interfaceHalt.test_and_set();
 
     // Scale ImGui and ImNodes styles.
 
-    if (instance.window().scalingFactor() != previousScalingFactor) {
+    if (instance.window().scalingFactor() != styling.previousScalingFactor) {
         ImGuiStyleScale();
         ImNodesStyleScale();
-        previousScalingFactor = instance.window().scalingFactor();
+        styling.previousScalingFactor = instance.window().scalingFactor();
     }
 
     // Draw main interface.
@@ -473,22 +477,23 @@ Result Compositor::draw() {
 
     // Release lock.
 
-    interfaceHalt.clear();
-    interfaceHalt.notify_one();
+    state.interfaceHalt.clear();
+    state.interfaceHalt.notify_one();
 
     return Result::SUCCESS;
 }
 
 Result Compositor::processInteractions() {
-    if (createBlockMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&, metadata = *createBlockMailbox](){
-            ImGui::InsertNotification({ ImGuiToastType_Info, 2500, "Adding module..." });
+    if (mailboxes.createBlockMailbox.has_value()) {
+        JST_DISPATCH_ASYNC([&, metadata = *mailboxes.createBlockMailbox](){
+//             ImGui::InsertNotification({ ImGuiToastType_Info, 2500, "Adding module..." });  // TODO: Re-enable when imgui-notify is available
 
             // Create new node fingerprint.
             const auto& [module, device] = metadata;
             const auto moduleEntry = Store::BlockMetadataList().at(module);
             if (moduleEntry.options.at(device).empty()) {
-                ImGui::InsertNotification({ ImGuiToastType_Error, 5000, "No compatible data types for this module." });
+                //  ImGui::InsertNotification({ ImGuiToastType_Error, 5000, "No compatible data types for this module." });  // TODO: Re-enable when imgui-notify is available
+                return; // No compatible data types
             }
             const auto& [inputDataType, outputDataType] = moduleEntry.options.at(device).at(0);
 
@@ -508,77 +513,77 @@ Result Compositor::processInteractions() {
             JST_CHECK_NOTIFY(Store::BlockConstructorList().at(fingerprint)(instance, "", configMap, inputMap, stateMap));
 
             // Update source.
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
 
-        createBlockMailbox.reset();
+        mailboxes.createBlockMailbox.reset();
     }
 
-    if (deleteBlockMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&, block = *deleteBlockMailbox](){
+    if (mailboxes.deleteBlockMailbox.has_value()) {
+        JST_DISPATCH_ASYNC([&, block = *mailboxes.deleteBlockMailbox](){
             JST_CHECK_NOTIFY(instance.removeBlock(block));
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        deleteBlockMailbox.reset();
+        mailboxes.deleteBlockMailbox.reset();
     }
 
-    if (renameBlockMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&, metadata = *renameBlockMailbox](){
+    if (mailboxes.renameBlockMailbox.has_value()) {
+        JST_DISPATCH_ASYNC([&, metadata = *mailboxes.renameBlockMailbox](){
             const auto& [locale, id] = metadata;
-            ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Renaming block..." });
+//             ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Renaming block..." });  // TODO: Re-enable when imgui-notify is available
             JST_CHECK_NOTIFY(instance.renameBlock(locale, id));
         });
-        renameBlockMailbox.reset();
+        mailboxes.renameBlockMailbox.reset();
     }
 
-    if (reloadBlockMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&, locale = *reloadBlockMailbox](){
-            ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });
+    if (mailboxes.reloadBlockMailbox.has_value()) {
+        JST_DISPATCH_ASYNC([&, locale = *mailboxes.reloadBlockMailbox](){
+//             ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Reloading block..." });  // TODO: Re-enable when imgui-notify is available
             JST_CHECK_NOTIFY(instance.reloadBlock(locale));
         });
-        reloadBlockMailbox.reset();
+        mailboxes.reloadBlockMailbox.reset();
     }
 
-    if (linkMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&, metadata = *linkMailbox](){
+    if (mailboxes.linkMailbox.has_value()) {
+        JST_DISPATCH_ASYNC([&, metadata = *mailboxes.linkMailbox](){
             const auto& [inputLocale, outputLocale] = metadata;
             JST_CHECK_NOTIFY(instance.linkBlocks(inputLocale, outputLocale));
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        linkMailbox.reset();
+        mailboxes.linkMailbox.reset();
     }
 
-    if (unlinkMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&, metadata = *unlinkMailbox](){
+    if (mailboxes.unlinkMailbox.has_value()) {
+        JST_DISPATCH_ASYNC([&, metadata = *mailboxes.unlinkMailbox](){
             const auto& [inputLocale, outputLocale] = metadata;
             JST_CHECK_NOTIFY(instance.unlinkBlocks(inputLocale, outputLocale));
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        unlinkMailbox.reset();
+        mailboxes.unlinkMailbox.reset();
     }
 
-    if (changeBlockBackendMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&, metadata = *changeBlockBackendMailbox](){
+    if (mailboxes.changeBlockBackendMailbox.has_value()) {
+        JST_DISPATCH_ASYNC([&, metadata = *mailboxes.changeBlockBackendMailbox](){
             const auto& [locale, device] = metadata;
             JST_CHECK_NOTIFY(instance.changeBlockBackend(locale, device));
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        changeBlockBackendMailbox.reset();
+        mailboxes.changeBlockBackendMailbox.reset();
     }
 
-    if (changeBlockDataTypeMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&, metadata = *changeBlockDataTypeMailbox](){
+    if (mailboxes.changeBlockDataTypeMailbox.has_value()) {
+        JST_DISPATCH_ASYNC([&, metadata = *mailboxes.changeBlockDataTypeMailbox](){
             const auto& [locale, type] = metadata;
             JST_CHECK_NOTIFY(instance.changeBlockDataType(locale, type));
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        changeBlockDataTypeMailbox.reset();
+        mailboxes.changeBlockDataTypeMailbox.reset();
     }
 
-    if (toggleBlockMailbox.has_value()) {
-        const auto& [locale, enable] = *toggleBlockMailbox;
-        if (nodeStates.contains(locale.block())) {
-            auto& state = nodeStates.at(locale.block());
+    if (mailboxes.toggleBlockMailbox.has_value()) {
+        const auto& [locale, enable] = *mailboxes.toggleBlockMailbox;
+        if (graph.nodeStates.contains(locale.block())) {
+            auto& state = graph.nodeStates.at(locale.block());
             if (!enable && state.enabled) {
                 state.cachedState = state.block->state;
                 state.hasCachedState = true;
@@ -602,52 +607,52 @@ Result Compositor::processInteractions() {
             }
 
             const char* toast = enable ? "Node enabled." : "Node disabled.";
-            ImGui::InsertNotification({ enable ? ImGuiToastType_Success
-                                               : ImGuiToastType_Info,
-                                        2000,
-                                        toast });
-            updateFlowgraphBlobMailbox = true;
+//             ImGui::InsertNotification({ enable ? ImGuiToastType_Success  // TODO: Re-enable when imgui-notify is available
+//                                                : ImGuiToastType_Info,
+//                                         2000,
+//                                         toast });
+            mailboxes.updateFlowgraphBlobMailbox = true;
         }
-        toggleBlockMailbox.reset();
+        mailboxes.toggleBlockMailbox.reset();
     }
 
-    if (resetFlowgraphMailbox.has_value()) {
+    if (mailboxes.resetFlowgraphMailbox.has_value()) {
         JST_DISPATCH_ASYNC([&](){
             JST_CHECK_NOTIFY(instance.reset());
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        resetFlowgraphMailbox.reset();
+        mailboxes.resetFlowgraphMailbox.reset();
     }
 
-    if (closeFlowgraphMailbox.has_value()) {
+    if (mailboxes.closeFlowgraphMailbox.has_value()) {
         JST_DISPATCH_ASYNC([&](){
             JST_CHECK_NOTIFY([&]{
                 JST_CHECK(instance.reset());
                 JST_CHECK(instance.flowgraph().destroy());
                 return Result::SUCCESS;
             }());
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        closeFlowgraphMailbox.reset();
+        mailboxes.closeFlowgraphMailbox.reset();
     }
 
-    if (openFlowgraphPathMailbox.has_value()) {
+    if (mailboxes.openFlowgraphPathMailbox.has_value()) {
         JST_DISPATCH_ASYNC([&](){
-            ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Loading flowgraph..." });
+//             ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Loading flowgraph..." });  // TODO: Re-enable when imgui-notify is available
             JST_CHECK_NOTIFY([&]{
                 JST_CHECK(instance.flowgraph().create());
-                JST_CHECK(instance.flowgraph().importFromFile(flowgraphFilename));
+                JST_CHECK(instance.flowgraph().importFromFile(state.flowgraphFilename));
                 JST_CHECK(checkAutoLayoutState());
                 return Result::SUCCESS;
             }());
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        openFlowgraphPathMailbox.reset();
+        mailboxes.openFlowgraphPathMailbox.reset();
     }
 
-    if (openFlowgraphBlobMailbox.has_value()) {
-        JST_DISPATCH_ASYNC([&, string = *openFlowgraphBlobMailbox](){
-            ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Loading flowgraph..." });
+    if (mailboxes.openFlowgraphBlobMailbox.has_value()) {
+        JST_DISPATCH_ASYNC([&, string = *mailboxes.openFlowgraphBlobMailbox](){
+//             ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Loading flowgraph..." });  // TODO: Re-enable when imgui-notify is available
             JST_CHECK_NOTIFY([&]{
                 JST_CHECK(instance.flowgraph().create());
                 std::vector<char> blob(string, string + strlen(string));
@@ -655,46 +660,46 @@ Result Compositor::processInteractions() {
                 JST_CHECK(checkAutoLayoutState());
                 return Result::SUCCESS;
             }());
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        openFlowgraphBlobMailbox.reset();
+        mailboxes.openFlowgraphBlobMailbox.reset();
     }
 
-    if (saveFlowgraphMailbox.has_value()) {
+    if (mailboxes.saveFlowgraphMailbox.has_value()) {
         JST_DISPATCH_ASYNC([&](){
-            ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Saving flowgraph..." });
-            JST_CHECK_NOTIFY(instance.flowgraph().exportToFile(flowgraphFilename));
+//             ImGui::InsertNotification({ ImGuiToastType_Info, 1000, "Saving flowgraph..." });  // TODO: Re-enable when imgui-notify is available
+            JST_CHECK_NOTIFY(instance.flowgraph().exportToFile(state.flowgraphFilename));
         });
-        saveFlowgraphMailbox.reset();
+        mailboxes.saveFlowgraphMailbox.reset();
     }
 
-    if (newFlowgraphMailbox.has_value()) {
+    if (mailboxes.newFlowgraphMailbox.has_value()) {
         JST_DISPATCH_ASYNC([&](){
             JST_CHECK_NOTIFY(instance.flowgraph().create());
-            updateFlowgraphBlobMailbox = true;
+            mailboxes.updateFlowgraphBlobMailbox = true;
         });
-        newFlowgraphMailbox.reset();
+        mailboxes.newFlowgraphMailbox.reset();
     }
 
-    if (updateFlowgraphBlobMailbox.has_value()) {
-        JST_CHECK(instance.flowgraph().exportToBlob(flowgraphBlob));
-        if (sourceEditorEnabled) {
-            flowgraphSourceBuffer.assign(flowgraphBlob.begin(), flowgraphBlob.end());
-            flowgraphSourceDirty = false;
+    if (mailboxes.updateFlowgraphBlobMailbox.has_value()) {
+        JST_CHECK(instance.flowgraph().exportToBlob(state.flowgraphBlob));
+        if (state.sourceEditorEnabled) {
+            state.flowgraphSourceBuffer.assign(state.flowgraphBlob.begin(), state.flowgraphBlob.end());
+            state.flowgraphSourceDirty = false;
         }
-        updateFlowgraphBlobMailbox.reset();
+        mailboxes.updateFlowgraphBlobMailbox.reset();
     }
 
-    if (applyFlowgraphMailbox.has_value()) {
-        auto blob = std::move(*applyFlowgraphMailbox);
-        applyFlowgraphMailbox.reset();
+    if (mailboxes.applyFlowgraphMailbox.has_value()) {
+        auto blob = std::move(*mailboxes.applyFlowgraphMailbox);
+        mailboxes.applyFlowgraphMailbox.reset();
         JST_CHECK(instance.flowgraph().create());
         JST_CHECK(instance.flowgraph().importFromBlob(blob));
         JST_CHECK(checkAutoLayoutState());
-        flowgraphBlob = blob;
-        flowgraphSourceBuffer.assign(flowgraphBlob.begin(), flowgraphBlob.end());
-        flowgraphSourceDirty = false;
-        ImGui::InsertNotification({ImGuiToastType_Success, 2000, "Flowgraph source applied."});
+        state.flowgraphBlob = blob;
+        state.flowgraphSourceBuffer.assign(state.flowgraphBlob.begin(), state.flowgraphBlob.end());
+        state.flowgraphSourceDirty = false;
+//         ImGui::InsertNotification({ImGuiToastType_Success, 2000, "Flowgraph source applied."});  // TODO: Re-enable when imgui-notify is available
     }
 
     return Result::SUCCESS;
@@ -761,21 +766,21 @@ Result Compositor::drawStatic() {
             ImGui::PopStyleColor();
 
             if (ImGui::MenuItem("About CyberEther")) {
-                globalModalToggle = true;
-                globalModalContentId = 0;
+                state.globalModalToggle = true;
+                state.globalModalContentId = 0;
             }
             if (ImGui::MenuItem("View License")) {
-                globalModalToggle = true;
-                globalModalContentId = 7;
+                state.globalModalToggle = true;
+                state.globalModalContentId = 7;
             }
             if (ImGui::MenuItem("Third-Party OSS")) {
-                globalModalToggle = true;
-                globalModalContentId = 8;
+                state.globalModalToggle = true;
+                state.globalModalContentId = 8;
             }
             ImGui::Separator();
             if (ImGui::MenuItem("Block Backend Matrix")) {
-                globalModalToggle = true;
-                globalModalContentId = 1;
+                state.globalModalToggle = true;
+                state.globalModalContentId = 1;
             }
 #ifndef JST_OS_BROWSER
             ImGui::Separator();
@@ -817,34 +822,34 @@ Result Compositor::drawStatic() {
         }
 
         if (ImGui::BeginMenu("View")) {
-            if (ImGui::MenuItem("Show Info Panel", nullptr, &infoPanelEnabled)) { }
-            if (ImGui::MenuItem("Show Flowgraph Source", nullptr, &sourceEditorEnabled, flowgraphLoaded)) { }
-            if (ImGui::MenuItem("Show Flowgraph", nullptr, &flowgraphEnabled, flowgraphLoaded)) { }
+            if (ImGui::MenuItem("Show Info Panel", nullptr, &state.infoPanelEnabled)) { }
+            if (ImGui::MenuItem("Show Flowgraph Source", nullptr, &state.sourceEditorEnabled, flowgraphLoaded)) { }
+            if (ImGui::MenuItem("Show Flowgraph", nullptr, &state.flowgraphEnabled, flowgraphLoaded)) { }
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Developer")) {
-            if (ImGui::MenuItem("Show Demo Window", nullptr, &debugDemoEnabled)) { }
-            if (ImGui::MenuItem("Show Latency Window", nullptr, &debugLatencyEnabled)) { }
-            if (ImGui::MenuItem("Show Viewport Window", nullptr, &debugViewportEnabled)) { }
-            if (ImGui::MenuItem("Enable Trace", nullptr, &debugEnableTrace)) {
-                if (debugEnableTrace) {
+            if (ImGui::MenuItem("Show Demo Window", nullptr, &state.debugDemoEnabled)) { }
+            if (ImGui::MenuItem("Show Latency Window", nullptr, &state.debugLatencyEnabled)) { }
+            if (ImGui::MenuItem("Show Viewport Window", nullptr, &state.debugViewportEnabled)) { }
+            if (ImGui::MenuItem("Enable Trace", nullptr, &state.debugEnableTrace)) {
+                if (state.debugEnableTrace) {
                     JST_LOG_SET_DEBUG_LEVEL(4);
                 } else {
                     JST_LOG_SET_DEBUG_LEVEL(JST_LOG_DEBUG_DEFAULT_LEVEL);
                 }
             }
             if (ImGui::MenuItem("Open Benchmarking Tool", nullptr, nullptr)) {
-                globalModalToggle = true;
-                globalModalContentId = 9;
+                state.globalModalToggle = true;
+                state.globalModalContentId = 9;
             }
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Help")) {
             if (ImGui::MenuItem("Getting started")) {
-                globalModalToggle = true;
-                globalModalContentId = 2;
+                state.globalModalToggle = true;
+                state.globalModalContentId = 2;
             }
             if (ImGui::MenuItem("Luigi's Twitter")) {
                 JST_CHECK_NOTIFY(Platform::OpenUrl("https://twitter.com/luigifcruz"));
@@ -860,12 +865,12 @@ Result Compositor::drawStatic() {
             }
             ImGui::Separator();
             if (ImGui::MenuItem("View license")) {
-                globalModalToggle = true;
-                globalModalContentId = 7;
+                state.globalModalToggle = true;
+                state.globalModalContentId = 7;
             }
             if (ImGui::MenuItem("Third-Party OSS")) {
-                globalModalToggle = true;
-                globalModalContentId = 8;
+                state.globalModalToggle = true;
+                state.globalModalContentId = 8;
             }
             ImGui::EndMenu();
         }
@@ -939,7 +944,7 @@ Result Compositor::drawStatic() {
                 ImGui::SameLine();
 
                 if (ImGui::Button(ICON_FA_LAYER_GROUP " New Stack")) {
-                    stacks[jst::fmt::format("Stack #{}", stacks.size())] = {true, 0};
+                    graph.stacks[jst::fmt::format("Stack #{}", graph.stacks.size())] = {true, 0};
                 }
                 ImGui::SameLine();
             }
@@ -950,8 +955,8 @@ Result Compositor::drawStatic() {
 
             if (ImGui::Button(ICON_FA_PLUG " Connect WebUSB Device")) {
                 if (EM_ASM_INT({ return 'usb' in navigator; }) == 0) {
-                    ImGui::InsertNotification({ ImGuiToastType_Error, 10000, "This browser is not compatible with WebUSB. "
-                                                                             "Try a Chromium based browser like Chrome, Brave, or Opera GX." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Error, 10000, "This browser is not compatible with WebUSB. "  // TODO: Re-enable when imgui-notify is available
+//                                                                              "Try a Chromium based browser like Chrome, Brave, or Opera GX." });
                 } else {
                     EM_ASM({  openUsbDevice(); });
                 }
@@ -1129,8 +1134,8 @@ Result Compositor::drawStatic() {
 
                         U32 deviceColor;
                         switch (device) {
-                            case Device::CPU: deviceColor = CpuColor; break;
-                            case Device::CUDA: deviceColor = CudaColor; break;
+                            case Device::CPU: deviceColor = CPUColor; break;
+                            case Device::CUDA: deviceColor = CUDAColor; break;
                             case Device::Metal: deviceColor = MetalColor; break;
                             case Device::Vulkan: deviceColor = VulkanColor; break;
                             case Device::WebGPU: deviceColor = WebGPUColor; break;
@@ -1143,8 +1148,8 @@ Result Compositor::drawStatic() {
                     }
 
                     if (ImGui::IsMouseClicked(0) || ImGui::IsMouseReleased(0)) {
-                        createBlockStagingMailbox = moduleToAttach;
-                        createBlockMailbox = moduleToAttach;
+                        mailboxes.createBlockStagingMailbox = moduleToAttach;
+                        mailboxes.createBlockMailbox = moduleToAttach;
                         moduleAttachMode = false;
                     } else if (ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
                         moduleAttachMode = false;
@@ -1195,7 +1200,7 @@ Result Compositor::drawStatic() {
                         int flatIndex = 0;
                         for (const auto& [id, module] : Store::BlockMetadataList(filterText)) {
 
-                            ImGui::PushFont(_boldFont, 0.0f);
+                            ImGui::PushFont(styling.fonts.bold, 0.0f);
                             ImGui::TextUnformatted(module.title.c_str());
                             ImGui::PopFont();
                             ImGui::SameLine();
@@ -1206,7 +1211,7 @@ Result Compositor::drawStatic() {
                             if (ImGui::BeginPopupContextItem(("fixed-block-description-" + id).c_str())) {
                                 ImGui::TextWrapped(ICON_FA_BOOK " Description");
                                 ImGui::Separator();
-                                ImGui::Markdown(module.description.c_str(), module.description.length(), _markdownConfig);
+                                ImGui::Markdown(module.description.c_str(), module.description.length(), styling.config);
                                 ImGui::EndPopup();
                             }
                             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
@@ -1219,7 +1224,7 @@ Result Compositor::drawStatic() {
                                 ImGui::Text("(click to pin)");
                                 ImGui::PopStyleColor();
                                 ImGui::Separator();
-                                ImGui::Markdown(module.description.c_str(), module.description.length(), _markdownConfig);
+                                ImGui::Markdown(module.description.c_str(), module.description.length(), styling.config);
                                 ImGui::EndTooltip();
                             }
                             ImGui::PopStyleVar();
@@ -1232,10 +1237,10 @@ Result Compositor::drawStatic() {
                                 U32 deviceColor;
                                 switch (device) {
                                     case Device::CPU:
-                                        deviceColor = CpuColor;
+                                        deviceColor = CPUColor;
                                         break;
                                     case Device::CUDA:
-                                        deviceColor = CudaColor;
+                                        deviceColor = CUDAColor;
                                         break;
                                     case Device::Metal:
                                         deviceColor = MetalColor;
@@ -1326,64 +1331,64 @@ Result Compositor::drawStatic() {
 
     // Save
     if (interactionTrigger == 1 && flowgraphLoaded) {
-        if (flowgraphFilename.empty()) {
-            globalModalToggle = true;
-            globalModalContentId = 4;
+        if (state.flowgraphFilename.empty()) {
+            state.globalModalToggle = true;
+            state.globalModalContentId = 4;
         } else {
-            saveFlowgraphMailbox = true;
+            mailboxes.saveFlowgraphMailbox = true;
         }
     }
 
     // New
     if (interactionTrigger == 2 && !flowgraphLoaded) {
-        newFlowgraphMailbox = true;
+        mailboxes.newFlowgraphMailbox = true;
     }
 
     // Open
     if (interactionTrigger == 3 && !flowgraphLoaded) {
-        globalModalToggle = true;
-        globalModalContentId = 3;
+        state.globalModalToggle = true;
+        state.globalModalContentId = 3;
     }
 
     // Info
     if (interactionTrigger == 4 && flowgraphLoaded) {
-        globalModalToggle = true;
-        globalModalContentId = 4;
+        state.globalModalToggle = true;
+        state.globalModalContentId = 4;
     }
 
     // Close
     if (interactionTrigger == 5 && flowgraphLoaded) {
-        if (flowgraphFilename.empty() &&
+        if (state.flowgraphFilename.empty() &&
             !instance.flowgraph().empty()) {
-            globalModalToggle = true;
-            globalModalContentId = 5;
+            state.globalModalToggle = true;
+            state.globalModalContentId = 5;
         } else {
-            closeFlowgraphMailbox = true;
+            mailboxes.closeFlowgraphMailbox = true;
         }
     }
 
     // Reset
     if (interactionTrigger == 6 && flowgraphLoaded) {
-        resetFlowgraphMailbox = true;
+        mailboxes.resetFlowgraphMailbox = true;
     }
 
     // Source
     if (interactionTrigger == 7 && flowgraphLoaded) {
-        sourceEditorEnabled = !sourceEditorEnabled;
-        if (sourceEditorEnabled) {
-            updateFlowgraphBlobMailbox = true;
+        state.sourceEditorEnabled = !state.sourceEditorEnabled;
+        if (state.sourceEditorEnabled) {
+            mailboxes.updateFlowgraphBlobMailbox = true;
         }
     }
 
     // Rename
     if (interactionTrigger == 8 && flowgraphLoaded) {
-        globalModalToggle = true;
-        globalModalContentId = 4;
+        state.globalModalToggle = true;
+        state.globalModalContentId = 4;
     }
 
     // Exit fullscreen
     if (interactionTrigger == 9) {
-        exitFullscreenMailbox = true;
+        mailboxes.exitFullscreenMailbox = true;
     }
 
     //
@@ -1404,8 +1409,8 @@ Result Compositor::drawStatic() {
     ImGui::Begin("##ArenaWindow", nullptr, windowFlags);
     ImGui::PopStyleVar();
 
-    mainNodeId = ImGui::GetID("##Arena");
-    ImGui::DockSpace(mainNodeId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode |
+    state.mainNodeId = ImGui::GetID("##Arena");
+    ImGui::DockSpace(state.mainNodeId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode |
                                                      ImGuiDockNodeFlags_AutoHideTabBar);
 
     ImGui::End();
@@ -1419,7 +1424,7 @@ Result Compositor::drawStatic() {
                                                     43.0f  / 255.0f,
                                                     43.0f  / 255.0f,
                                                     100.0f / 255.0f));
-    ImGui::RenderNotifications();
+    // ImGui::RenderNotifications();  // TODO: Re-enable when imgui-notify is available
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
 
@@ -1428,12 +1433,12 @@ Result Compositor::drawStatic() {
     //
 
     [&](){
-        if (!sourceEditorEnabled) {
+        if (!state.sourceEditorEnabled) {
             return;
         }
 
         ImGui::SetNextWindowSize(ImVec2(500.0f * scalingFactor, 300.0f * scalingFactor), ImGuiCond_FirstUseEver);
-        if (!ImGui::Begin("Source File", &sourceEditorEnabled)) {
+        if (!ImGui::Begin("Source File", &state.sourceEditorEnabled)) {
             ImGui::End();
             return;
         }
@@ -1444,22 +1449,22 @@ Result Compositor::drawStatic() {
 
         if (editorFocused && ctrlHeld) {
             if (ImGui::IsKeyPressed(ImGuiKey_S)) {
-                applyFlowgraphMailbox = std::vector<char>(flowgraphSourceBuffer.begin(),
-                                                          flowgraphSourceBuffer.end());
+                mailboxes.applyFlowgraphMailbox = std::vector<char>(state.flowgraphSourceBuffer.begin(),
+                                                          state.flowgraphSourceBuffer.end());
             } else if (ImGui::IsKeyPressed(ImGuiKey_R)) {
                 if (shiftHeld) {
-                    updateFlowgraphBlobMailbox = true;
-                } else if (flowgraphSourceDirty) {
-                    flowgraphSourceDirty = false;
-                    updateFlowgraphBlobMailbox = true;
+                    mailboxes.updateFlowgraphBlobMailbox = true;
+                } else if (state.flowgraphSourceDirty) {
+                    state.flowgraphSourceDirty = false;
+                    mailboxes.updateFlowgraphBlobMailbox = true;
                 }
             }
         }
 
-        if (flowgraphSourceBuffer.empty()) {
+        if (state.flowgraphSourceBuffer.empty()) {
             ImGui::Text("Empty source file.");
         } else {
-            ImGui::TextDisabled(flowgraphSourceDirty ? ICON_FA_CIRCLE_EXCLAMATION " Unsaved changes"
+            ImGui::TextDisabled(state.flowgraphSourceDirty ? ICON_FA_CIRCLE_EXCLAMATION " Unsaved changes"
                                                      : ICON_FA_CIRCLE_CHECK " Up to date");
             ImGui::SameLine();
             ImGui::TextDisabled(ICON_FA_KEYBOARD " Ctrl+S apply, Ctrl+R revert, Ctrl+Shift+R reload");
@@ -1470,27 +1475,27 @@ Result Compositor::drawStatic() {
             const ImGuiInputTextFlags editorFlags = ImGuiInputTextFlags_AllowTabInput |
                                                     ImGuiInputTextFlags_NoHorizontalScroll;
             if (ImGui::InputTextMultiline("##SourceFileData",
-                                          &flowgraphSourceBuffer,
+                                          &state.flowgraphSourceBuffer,
                                           editorSize,
                                           editorFlags)) {
-                flowgraphSourceDirty = true;
+                state.flowgraphSourceDirty = true;
             }
 
             ImGui::Spacing();
 
-            if (flowgraphSourceDirty) {
+            if (state.flowgraphSourceDirty) {
                 if (ImGui::Button("Apply Changes")) {
-                    applyFlowgraphMailbox = std::vector<char>(flowgraphSourceBuffer.begin(),
-                                                              flowgraphSourceBuffer.end());
+                    mailboxes.applyFlowgraphMailbox = std::vector<char>(state.flowgraphSourceBuffer.begin(),
+                                                              state.flowgraphSourceBuffer.end());
                 }
                 ImGui::SameLine();
                 if (ImGui::Button("Revert")) {
-                    flowgraphSourceDirty = false;
-                    updateFlowgraphBlobMailbox = true;
+                    state.flowgraphSourceDirty = false;
+                    mailboxes.updateFlowgraphBlobMailbox = true;
                 }
             } else {
                 if (ImGui::Button("Reload")) {
-                    updateFlowgraphBlobMailbox = true;
+                    mailboxes.updateFlowgraphBlobMailbox = true;
                 }
             }
         }
@@ -1499,11 +1504,11 @@ Result Compositor::drawStatic() {
     }();
 
     //
-    // Draw stacks.
+    // Draw graph.stacks.
     //
 
     std::vector<std::string> stacksToRemove;
-    for (auto& [stack, state] : stacks) {
+    for (auto& [stack, state] : graph.stacks) {
         auto& [enabled, id] = state;
 
         if (!enabled) {
@@ -1512,7 +1517,7 @@ Result Compositor::drawStatic() {
         }
 
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-        ImGui::SetNextWindowDockID(mainNodeId, ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowDockID(this->state.mainNodeId, ImGuiCond_FirstUseEver);
         ImGui::SetNextWindowSize(ImVec2(500.0f * scalingFactor, 300.0f * scalingFactor), ImGuiCond_FirstUseEver);
         ImGui::Begin(stack.c_str(), &enabled);
         ImGui::PopStyleVar();
@@ -1543,7 +1548,7 @@ Result Compositor::drawStatic() {
         ImGui::End();
     }
     for (const auto& stack : stacksToRemove) {
-        stacks.erase(stack);
+        graph.stacks.erase(stack);
     }
 
     //
@@ -1551,7 +1556,7 @@ Result Compositor::drawStatic() {
     //
 
     [&](){
-        if (!infoPanelEnabled || fullscreenEnabled) {
+        if (!state.infoPanelEnabled || state.fullscreenEnabled) {
             return;
         }
 
@@ -1598,7 +1603,7 @@ Result Compositor::drawStatic() {
     //
 
     [&](){
-        if (!fullscreenEnabled) {
+        if (!state.fullscreenEnabled) {
             return;
         }
 
@@ -1657,7 +1662,7 @@ Result Compositor::drawStatic() {
 
         ImGui::TextUnformatted(ICON_FA_USER_ASTRONAUT);
         ImGui::SameLine();
-        ImGui::PushFont(_boldFont, 0.0f);
+        ImGui::PushFont(styling.fonts.bold, 0.0f);
         ImGui::TextUnformatted("Welcome to CyberEther!");
         ImGui::PopFont();
         ImGui::SameLine();
@@ -1672,7 +1677,7 @@ Result Compositor::drawStatic() {
         const auto largestTextSize = ImGui::CalcTextSize(largestText).x;
 
         static bool usePrimaryTexture = true;
-        auto texture = usePrimaryTexture ? primaryBannerTexture : secondaryBannerTexture;
+        auto texture = usePrimaryTexture ? state.primaryBannerTexture : state.secondaryBannerTexture;
         const auto& [w, h] = texture->size();
         const auto ratio = static_cast<F32>(w) / static_cast<F32>(h);
         ImGui::Image(texture->raw(), ImVec2(largestTextSize, largestTextSize / ratio));
@@ -1697,19 +1702,19 @@ Result Compositor::drawStatic() {
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(scalingFactor * 6.0f, scalingFactor * 6.0f));
 
         if (ImGui::Button(ICON_FA_FILE " New Flowgraph")) {
-            newFlowgraphMailbox = true;
+            mailboxes.newFlowgraphMailbox = true;
         }
         ImGui::SameLine();
 
         if (ImGui::Button(ICON_FA_FOLDER_OPEN " Open Flowgraph")) {
-            globalModalToggle = true;
-            globalModalContentId = 3;
+            state.globalModalToggle = true;
+            state.globalModalContentId = 3;
         }
         ImGui::SameLine();
 
         if (ImGui::Button(ICON_FA_VIAL " Open Examples")) {
-            globalModalToggle = true;
-            globalModalContentId = 3;
+            state.globalModalToggle = true;
+            state.globalModalContentId = 3;
         }
         ImGui::SameLine();
 
@@ -1723,20 +1728,20 @@ Result Compositor::drawStatic() {
         ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(scalingFactor * 6.0f, scalingFactor * 6.0f));
 
         if (ImGui::Button(ICON_FA_CIRCLE_QUESTION " Getting Started")) {
-            globalModalToggle = true;
-            globalModalContentId = 2;
+            state.globalModalToggle = true;
+            state.globalModalContentId = 2;
         }
         ImGui::SameLine();
 
         if (ImGui::Button(ICON_FA_CIRCLE_INFO " About CyberEther")) {
-            globalModalToggle = true;
-            globalModalContentId = 0;
+            state.globalModalToggle = true;
+            state.globalModalContentId = 0;
         }
         ImGui::SameLine();
 
         if (ImGui::Button(ICON_FA_CUBE " Block Backend Matrix")) {
-            globalModalToggle = true;
-            globalModalContentId = 1;
+            state.globalModalToggle = true;
+            state.globalModalContentId = 1;
         }
         ImGui::SameLine();
 
@@ -1749,12 +1754,12 @@ Result Compositor::drawStatic() {
     // Global Modal
     //
 
-    if (globalModalToggle) {
+    if (state.globalModalToggle) {
         ImGui::OpenPopup("##help_modal");
-        if (globalModalContentId == 4) {
-            filenameField = flowgraphFilename;
+        if (state.globalModalContentId == 4) {
+            state.filenameField = state.flowgraphFilename;
         }
-        globalModalToggle = false;
+        state.globalModalToggle = false;
     }
 
     ImVec2 center = ImGui::GetMainViewport()->GetCenter();
@@ -1765,7 +1770,7 @@ Result Compositor::drawStatic() {
                                                         ImGuiWindowFlags_NoResize |
                                                         ImGuiWindowFlags_NoMove|
                                                         ImGuiWindowFlags_NoScrollbar)) {
-        if (globalModalContentId == 0) {
+        if (state.globalModalContentId == 0) {
             ImGui::TextUnformatted(ICON_FA_CIRCLE_INFO " About CyberEther");
             ImGui::Separator();
             ImGui::Spacing();
@@ -1793,7 +1798,7 @@ Result Compositor::drawStatic() {
             if (ImGui::Button("Close", ImVec2(-1, 0))) {
                 ImGui::CloseCurrentPopup();
             }
-        } else if (globalModalContentId == 1) {
+        } else if (state.globalModalContentId == 1) {
             ImGui::TextUnformatted(ICON_FA_CUBE " Block Backend Matrix");
             ImGui::Separator();
             ImGui::Spacing();
@@ -1812,11 +1817,11 @@ Result Compositor::drawStatic() {
             if (ImGui::BeginTable("table1", 5, tableFlags, tableHeight)) {
                 static std::vector<std::tuple<const char*, float, U32, bool, Device>> columns = {
                     {"Block Name",  0.25f,   DefaultColor, false, Device::None},
-                    {"CPU",         0.1875f, CpuColor,     true,  Device::CPU},
+                    {"CPU",         0.1875f, CPUColor,     true,  Device::CPU},
 #if defined(JST_OS_MAC) || defined(JST_OS_IOS)
                     {"Metal",       0.1875f, MetalColor,   true,  Device::Metal},
 #else
-                    {"CUDA",        0.1875f, CudaColor,  true,  Device::CUDA},
+                    {"CUDA",        0.1875f, CUDAColor,  true,  Device::CUDA},
 #endif
                     {"Vulkan",      0.1875f, VulkanColor,  true,  Device::Vulkan},
                     {"WebGPU",      0.1875f, WebGPUColor,  true,  Device::WebGPU}
@@ -1874,7 +1879,7 @@ Result Compositor::drawStatic() {
             if (ImGui::Button("Close", ImVec2(-1, 0))) {
                 ImGui::CloseCurrentPopup();
             }
-        } else if (globalModalContentId == 2) {
+        } else if (state.globalModalContentId == 2) {
             ImGui::TextUnformatted(ICON_FA_CIRCLE_QUESTION " Getting started");
             ImGui::Separator();
             ImGui::Spacing();
@@ -1895,7 +1900,7 @@ Result Compositor::drawStatic() {
             if (ImGui::Button("Close", ImVec2(-1, 0))) {
                 ImGui::CloseCurrentPopup();
             }
-        } else if (globalModalContentId == 3) {
+        } else if (state.globalModalContentId == 3) {
             ImGui::TextUnformatted(ICON_FA_STORE " Flowgraph Store");
             ImGui::Separator();
             ImGui::Spacing();
@@ -1941,12 +1946,12 @@ Result Compositor::drawStatic() {
                     drawList->AddRectFilled(cellMin, cellMax, IM_COL32(13, 13, 13, 138), 5.0f);
 
                     if (ImGui::InvisibleButton(("cell_button_" + id).c_str(), cellSize)) {
-                        openFlowgraphBlobMailbox = flowgraph.data;
+                        mailboxes.openFlowgraphBlobMailbox = flowgraph.data;
                         ImGui::CloseCurrentPopup();
                     }
 
                     ImGui::SetCursorScreenPos(ImVec2(cellMin.x + textPadding, cellMin.y + textPadding));
-                    ImGui::PushFont(_h2Font, 0.0f);
+                    ImGui::PushFont(styling.fonts.h2, 0.0f);
                     ImGui::Text("%s", flowgraph.title.c_str());
                     ImGui::PopFont();
                     ImGui::SameLine();
@@ -2006,13 +2011,13 @@ Result Compositor::drawStatic() {
             openFile |= ImGui::Button(ICON_FA_PLAY " Load");
             if (openFile) {
                 if (globalModalPath.size() == 0) {
-                    ImGui::InsertNotification({ ImGuiToastType_Error, 5000, "Please enter a valid path or URL." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Error, 5000, "Please enter a valid path or URL." });  // TODO: Re-enable when imgui-notify is available
                 } else if (std::filesystem::exists(globalModalPath)) {
-                    flowgraphFilename = globalModalPath;
-                    openFlowgraphPathMailbox = true;
+                    state.flowgraphFilename = globalModalPath;
+                    mailboxes.openFlowgraphPathMailbox = true;
                     ImGui::CloseCurrentPopup();
                 } else {
-                    ImGui::InsertNotification({ ImGuiToastType_Error, 5000, "The specified path doesn't exist." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Error, 5000, "The specified path doesn't exist." });  // TODO: Re-enable when imgui-notify is available
                 }
             }
             ImGui::PopStyleVar();
@@ -2029,7 +2034,7 @@ Result Compositor::drawStatic() {
             if (ImGui::Button("Close", ImVec2(-1, 0))) {
                 ImGui::CloseCurrentPopup();
             }
-        } else if (globalModalContentId == 4) {
+        } else if (state.globalModalContentId == 4) {
             ImGui::TextUnformatted(ICON_FA_CIRCLE_INFO " Flowgraph Information");
             ImGui::Separator();
             ImGui::Spacing();
@@ -2119,13 +2124,13 @@ Result Compositor::drawStatic() {
                 ImGui::TableSetColumnIndex(0);
                 ImGui::SetNextItemWidth(-1);
 
-                if (ImGui::InputText("##flowgraph-info-filename", &filenameField, ImGuiInputTextFlags_EnterReturnsTrue)) {
+                if (ImGui::InputText("##flowgraph-info-filename", &state.filenameField, ImGuiInputTextFlags_EnterReturnsTrue)) {
                     saveFile |= true;
                 }
 
                 ImGui::TableSetColumnIndex(1);
                 if (ImGui::Button("Browse File", ImVec2(-1, 0))) {
-                    const auto& res = Platform::SaveFile(filenameField);
+                    const auto& res = Platform::SaveFile(state.filenameField);
                     if (res == Result::SUCCESS) {
                         saveFile |= true;
                     }
@@ -2138,21 +2143,21 @@ Result Compositor::drawStatic() {
             saveFile |= ImGui::Button(ICON_FA_FLOPPY_DISK " Save Flowgraph", ImVec2(-1, 0));
             if (saveFile) {
                 [&]{
-                    if (filenameField.empty()) {
+                    if (state.filenameField.empty()) {
                         JST_ERROR("[FLOWGRAPH] Filename is empty.");
                         JST_CHECK_NOTIFY(Result::ERROR);
                         return;
                     }
 
                     std::regex filenamePattern("^.+\\.ya?ml$");
-                    if (!std::regex_match(filenameField, filenamePattern)) {
-                        JST_ERROR("[FLOWGRAPH] Invalid filename '{}'.", filenameField);
+                    if (!std::regex_match(state.filenameField, filenamePattern)) {
+                        JST_ERROR("[FLOWGRAPH] Invalid filename '{}'.", state.filenameField);
                         JST_CHECK_NOTIFY(Result::ERROR);
                         return;
                     }
 
-                    flowgraphFilename = filenameField;
-                    saveFlowgraphMailbox = true;
+                    state.flowgraphFilename = state.filenameField;
+                    mailboxes.saveFlowgraphMailbox = true;
                     ImGui::CloseCurrentPopup();
                 }();
             }
@@ -2165,7 +2170,7 @@ Result Compositor::drawStatic() {
             if (ImGui::Button("Close", ImVec2(-1, 0))) {
                 ImGui::CloseCurrentPopup();
             }
-        } else if (globalModalContentId == 5) {
+        } else if (state.globalModalContentId == 5) {
             ImGui::TextUnformatted(ICON_FA_TRIANGLE_EXCLAMATION " Close Flowgraph");
             ImGui::Separator();
             ImGui::Spacing();
@@ -2177,38 +2182,38 @@ Result Compositor::drawStatic() {
             ImGui::Separator();
             ImGui::Spacing();
             if (ImGui::Button("Save", ImVec2(-1, 0))) {
-                globalModalContentId = 4;
+                state.globalModalContentId = 4;
             }
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
             if (ImGui::Button("Close Anyway", ImVec2(-1, 0))) {
-                closeFlowgraphMailbox = true;
+                mailboxes.closeFlowgraphMailbox = true;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::PopStyleColor();
             if (ImGui::Button("Cancel", ImVec2(-1, 0))) {
                 ImGui::CloseCurrentPopup();
             }
-        } else if (globalModalContentId == 6) {
+        } else if (state.globalModalContentId == 6) {
             ImGui::TextUnformatted(ICON_FA_PENCIL " Rename Block");
             ImGui::Separator();
             ImGui::Spacing();
 
             ImGui::SetNextItemWidth(-1);
-            ImGui::InputText("##rename-block-new-id", &renameBlockNewId);
+            ImGui::InputText("##rename-block-new-id", &state.renameBlockNewId);
 
             ImGui::Spacing();
             ImGui::Separator();
             ImGui::Spacing();
             ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 1.0f, 1.0f));
             if (ImGui::Button("Rename Block", ImVec2(-1, 0))) {
-                renameBlockMailbox = {renameBlockLocale, renameBlockNewId};
+                mailboxes.renameBlockMailbox = {state.renameBlockLocale, state.renameBlockNewId};
                 ImGui::CloseCurrentPopup();
             }
             ImGui::PopStyleColor();
             if (ImGui::Button("Close", ImVec2(-1, 0))) {
                 ImGui::CloseCurrentPopup();
             }
-        } else if (globalModalContentId == 7) {
+        } else if (state.globalModalContentId == 7) {
             ImGui::TextUnformatted(ICON_FA_KEY " CyberEther License");
             ImGui::Separator();
             ImGui::Spacing();
@@ -2257,7 +2262,7 @@ Result Compositor::drawStatic() {
             if (ImGui::Button("Close", ImVec2(-1, 0))) {
                 ImGui::CloseCurrentPopup();
             }
-        } else if (globalModalContentId == 8) {
+        } else if (state.globalModalContentId == 8) {
             ImGui::TextUnformatted(ICON_FA_BOX_OPEN " Third-Party OSS");
             ImGui::Separator();
             ImGui::Spacing();
@@ -2306,7 +2311,7 @@ Result Compositor::drawStatic() {
             if (ImGui::Button("Close", ImVec2(-1, 0))) {
                 ImGui::CloseCurrentPopup();
             }
-        } else if (globalModalContentId == 9) {
+        } else if (state.globalModalContentId == 9) {
             ImGui::TextUnformatted(ICON_FA_GAUGE_HIGH " Benchmarking Tool");
             ImGui::Separator();
             ImGui::Spacing();
@@ -2322,31 +2327,31 @@ Result Compositor::drawStatic() {
                                                                                                                   JETSTREAM_BUILD_NATIVE);
 
             if (ImGui::Button("Run Benchmark")) {
-                if (benchmarkRunning) {
-                    ImGui::InsertNotification({ ImGuiToastType_Error, 5000, "A benchmark is already running." });
+                if (state.benchmarkRunning) {
+//                     ImGui::InsertNotification({ ImGuiToastType_Error, 5000, "A benchmark is already state.running." });  // TODO: Re-enable when imgui-notify is available
                 } else {
                     std::thread([&]{
                         benchmarkData.clear();
-                        benchmarkRunning = true;
+                        state.benchmarkRunning = true;
                         Benchmark::ResetResults();
-                        ImGui::InsertNotification({ ImGuiToastType_Info, 5000, "Running benchmark..." });
+//                         ImGui::InsertNotification({ ImGuiToastType_Info, 5000, "Running benchmark..." });  // TODO: Re-enable when imgui-notify is available
                         Benchmark::Run("markdown", benchmarkData);
-                        benchmarkRunning = false;
+                        state.benchmarkRunning = false;
                     }).detach();
                 }
             }
             ImGui::SameLine();
             if (ImGui::Button("Reset Benchmark")) {
-                if (!benchmarkRunning) {
+                if (!state.benchmarkRunning) {
                     benchmarkData.clear();
                     Benchmark::ResetResults();
                 }
             }
             ImGui::SameLine();
             if (ImGui::Button("Copy Benchmark Results")) {
-                if (!benchmarkRunning) {
+                if (!state.benchmarkRunning) {
                     ImGui::SetClipboardText(jst::fmt::format("{}\n{}", buildInfoStr, benchmarkData.str()).c_str());
-                    ImGui::InsertNotification({ ImGuiToastType_Info, 5000, "Benchmark results copied to clipboard." });
+//                     ImGui::InsertNotification({ ImGuiToastType_Info, 5000, "Benchmark results copied to clipboard." });  // TODO: Re-enable when imgui-notify is available
                 }
             }
 
@@ -2446,7 +2451,7 @@ Result Compositor::drawStatic() {
     //
 
     [&](){
-        if (!debugLatencyEnabled) {
+        if (!state.debugLatencyEnabled) {
             return;
         }
 
@@ -2505,7 +2510,7 @@ Result Compositor::drawStatic() {
     //
 
     [&](){
-        if (!debugViewportEnabled) {
+        if (!state.debugViewportEnabled) {
             return;
         }
 
@@ -2538,7 +2543,7 @@ Result Compositor::drawStatic() {
     // Debug Demo Render
     //
 
-    if (debugDemoEnabled) {
+    if (state.debugDemoEnabled) {
         ImGui::ShowDemoWindow();
     }
 
@@ -2559,12 +2564,12 @@ Result Compositor::drawFlowgraph() {
     // View Render
     //
 
-    for (const auto& [_, state] : nodeStates) {
+    for (const auto& [_, state] : graph.nodeStates) {
         if (!state.enabled ||
             !state.block->getState().viewEnabled ||
             !state.block->shouldDrawView() ||
             !state.block->complete() ||
-            fullscreenEnabled) {
+            this->state.fullscreenEnabled) {
             continue;
         }
 
@@ -2584,19 +2589,19 @@ Result Compositor::drawFlowgraph() {
     // Fullscreen Render
     //
 
-    for (const auto& [_, state] : nodeStates) {
+    for (const auto& [_, state] : graph.nodeStates) {
         if (!state.enabled ||
             !state.block->getState().fullscreenEnabled ||
             !state.block->shouldDrawFullscreen() ||
             !state.block->complete()) {
-            fullscreenEnabled = false;
+            this->state.fullscreenEnabled = false;
             continue;
         }
 
-        if (exitFullscreenMailbox.has_value()) {
+        if (mailboxes.exitFullscreenMailbox.has_value()) {
             state.block->state.fullscreenEnabled = false;
-            exitFullscreenMailbox.reset();
-            fullscreenEnabled = false;
+            mailboxes.exitFullscreenMailbox.reset();
+            this->state.fullscreenEnabled = false;
             break;
         }
 
@@ -2624,7 +2629,7 @@ Result Compositor::drawFlowgraph() {
         ImGui::PopStyleVar();
         ImGui::PopStyleVar();
 
-        fullscreenEnabled = true;
+        this->state.fullscreenEnabled = true;
         break;
     }
 
@@ -2632,11 +2637,11 @@ Result Compositor::drawFlowgraph() {
     // Control Render
     //
 
-    for (const auto& [_, state] : nodeStates) {
+    for (const auto& [_, state] : graph.nodeStates) {
         if (!state.enabled ||
             !state.block->getState().controlEnabled ||
             !state.block->shouldDrawControl() ||
-            fullscreenEnabled) {
+            this->state.fullscreenEnabled) {
             continue;
         }
 
@@ -2678,7 +2683,7 @@ Result Compositor::drawFlowgraph() {
     //
 
     [&](){
-        if (!flowgraphEnabled || fullscreenEnabled || !instance.flowgraph().created()) {
+        if (!state.flowgraphEnabled || state.fullscreenEnabled || !instance.flowgraph().created()) {
             return;
         }
 
@@ -2690,7 +2695,7 @@ Result Compositor::drawFlowgraph() {
         }
 
         // Set node position according to the internal state.
-        for (const auto& [locale, state] : nodeStates) {
+        for (const auto& [locale, state] : graph.nodeStates) {
             const auto& [x, y] = state.block->getState().nodePos;
             ImNodes::SetNodeGridSpacePos(state.id, ImVec2(x * scalingFactor, y * scalingFactor));
         }
@@ -2698,7 +2703,7 @@ Result Compositor::drawFlowgraph() {
         ImNodes::BeginNodeEditor();
         ImNodes::MiniMap(0.075f * scalingFactor, ImNodesMiniMapLocation_TopRight);
 
-        for (const auto& [locale, state] : nodeStates) {
+        for (const auto& [locale, state] : graph.nodeStates) {
             const auto& block = state.block;
             const auto& moduleEntry = Store::BlockMetadataList().at(block->id());
 
@@ -2718,18 +2723,18 @@ Result Compositor::drawFlowgraph() {
             if (block->complete() && nodeEnabled) {
                 switch (block->device()) {
                     case Device::CPU:
-                        ImNodes::PushColorStyle(ImNodesCol_TitleBar,         CpuColor);
-                        ImNodes::PushColorStyle(ImNodesCol_TitleBarHovered,  CpuColor);
-                        ImNodes::PushColorStyle(ImNodesCol_TitleBarSelected, CpuColorSelected);
-                        ImNodes::PushColorStyle(ImNodesCol_Pin,              CpuColor);
-                        ImNodes::PushColorStyle(ImNodesCol_PinHovered,       CpuColorSelected);
+                        ImNodes::PushColorStyle(ImNodesCol_TitleBar,         CPUColor);
+                        ImNodes::PushColorStyle(ImNodesCol_TitleBarHovered,  CPUColor);
+                        ImNodes::PushColorStyle(ImNodesCol_TitleBarSelected, CPUColorSelected);
+                        ImNodes::PushColorStyle(ImNodesCol_Pin,              CPUColor);
+                        ImNodes::PushColorStyle(ImNodesCol_PinHovered,       CPUColorSelected);
                         break;
                     case Device::CUDA:
-                        ImNodes::PushColorStyle(ImNodesCol_TitleBar,         CudaColor);
-                        ImNodes::PushColorStyle(ImNodesCol_TitleBarHovered,  CudaColor);
-                        ImNodes::PushColorStyle(ImNodesCol_TitleBarSelected, CudaColorSelected);
-                        ImNodes::PushColorStyle(ImNodesCol_Pin,              CudaColor);
-                        ImNodes::PushColorStyle(ImNodesCol_PinHovered,       CudaColorSelected);
+                        ImNodes::PushColorStyle(ImNodesCol_TitleBar,         CUDAColor);
+                        ImNodes::PushColorStyle(ImNodesCol_TitleBarHovered,  CUDAColor);
+                        ImNodes::PushColorStyle(ImNodesCol_TitleBarSelected, CUDAColorSelected);
+                        ImNodes::PushColorStyle(ImNodesCol_Pin,              CUDAColor);
+                        ImNodes::PushColorStyle(ImNodesCol_PinHovered,       CUDAColorSelected);
                         break;
                     case Device::Metal:
                         ImNodes::PushColorStyle(ImNodesCol_TitleBar,         MetalColor);
@@ -2779,7 +2784,7 @@ Result Compositor::drawFlowgraph() {
             if (ImGui::BeginPopupContextItem("fixed-block-description")) {
                 ImGui::TextWrapped(ICON_FA_BOOK " Description");
                 ImGui::Separator();
-                ImGui::Markdown(moduleEntry.description.c_str(), moduleEntry.description.length(), _markdownConfig);
+                ImGui::Markdown(moduleEntry.description.c_str(), moduleEntry.description.length(), styling.config);
                 ImGui::EndPopup();
             }
             if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort)) {
@@ -2792,7 +2797,7 @@ Result Compositor::drawFlowgraph() {
                 ImGui::Text("(click to pin)");
                 ImGui::PopStyleColor();
                 ImGui::Separator();
-                ImGui::Markdown(moduleEntry.description.c_str(), moduleEntry.description.length(), _markdownConfig);
+                ImGui::Markdown(moduleEntry.description.c_str(), moduleEntry.description.length(), styling.config);
                 ImGui::EndTooltip();
             }
             ImGui::PopStyleVar();
@@ -2867,7 +2872,7 @@ Result Compositor::drawFlowgraph() {
 
                 ImNodes::PushAttributeFlag(ImNodesAttributeFlags_EnableLinkDetachWithDragClick);
                 for (const auto& [inputPinId, _] : state.inputs) {
-                    const auto& pinName = pinLocaleMap.at(inputPinId).pinId;
+                    const auto& pinName = graph.pinLocaleMap.at(inputPinId).pinId;
 
                     ImNodes::BeginInputAttribute(inputPinId);
                     ImGui::TextUnformatted(pinName.c_str());
@@ -2876,7 +2881,7 @@ Result Compositor::drawFlowgraph() {
                 ImNodes::PopAttributeFlag();
 
                 for (const auto& [outputPinId, _] : state.outputs) {
-                    const auto& pinName = pinLocaleMap.at(outputPinId).pinId;
+                    const auto& pinName = graph.pinLocaleMap.at(outputPinId).pinId;
                     const F32 textWidth = ImGui::CalcTextSize(pinName.c_str()).x;
 
                     ImNodes::BeginOutputAttribute(outputPinId);
@@ -2982,24 +2987,24 @@ Result Compositor::drawFlowgraph() {
         }
 
         // Draw node links.
-        for (const auto& [linkId, locales] : linkLocaleMap) {
+        for (const auto& [linkId, locales] : graph.linkLocaleMap) {
             const auto& [inputLocale, outputLocale] = locales;
-            const auto& inputPinId = inputLocalePinMap.at(inputLocale);
-            const auto& outputPinId = outputLocalePinMap.at(outputLocale);
-            const auto& outputNodeState = nodeStates.at(outputLocale.block());
+            const auto& inputPinId = graph.inputLocalePinMap.at(inputLocale);
+            const auto& outputPinId = graph.outputLocalePinMap.at(outputLocale);
+            const auto& outputNodeState = graph.nodeStates.at(outputLocale.block());
             const auto& outputBlock = outputNodeState.block;
 
             if (outputBlock->complete() && outputNodeState.enabled) {
                 switch (outputBlock->device()) {
                     case Device::CPU:
-                        ImNodes::PushColorStyle(ImNodesCol_Link,         CpuColor);
-                        ImNodes::PushColorStyle(ImNodesCol_LinkHovered,  CpuColor);
-                        ImNodes::PushColorStyle(ImNodesCol_LinkSelected, CpuColorSelected);
+                        ImNodes::PushColorStyle(ImNodesCol_Link,         CPUColor);
+                        ImNodes::PushColorStyle(ImNodesCol_LinkHovered,  CPUColor);
+                        ImNodes::PushColorStyle(ImNodesCol_LinkSelected, CPUColorSelected);
                         break;
                     case Device::CUDA:
-                        ImNodes::PushColorStyle(ImNodesCol_Link,         CudaColor);
-                        ImNodes::PushColorStyle(ImNodesCol_LinkHovered,  CudaColor);
-                        ImNodes::PushColorStyle(ImNodesCol_LinkSelected, CudaColorSelected);
+                        ImNodes::PushColorStyle(ImNodesCol_Link,         CUDAColor);
+                        ImNodes::PushColorStyle(ImNodesCol_LinkHovered,  CUDAColor);
+                        ImNodes::PushColorStyle(ImNodesCol_LinkSelected, CUDAColorSelected);
                         break;
                     case Device::Metal:
                         ImNodes::PushColorStyle(ImNodesCol_Link,         MetalColor);
@@ -3035,18 +3040,18 @@ Result Compositor::drawFlowgraph() {
         ImNodes::EndNodeEditor();
 
         // Update internal state node position.
-        for (const auto& [locale, state] : nodeStates) {
+        for (const auto& [locale, state] : graph.nodeStates) {
             const auto& [x, y] = ImNodes::GetNodeGridSpacePos(state.id);
             state.block->state.nodePos = {x / scalingFactor, y / scalingFactor};
         }
 
         // Spatially organize graph.
-        if (!graphSpatiallyOrganized) {
+        if (!state.graphSpatiallyOrganized) {
             JST_DEBUG("[COMPOSITOR] Running graph auto-route.");
 
             F32 previousClustersHeight = 0.0f;
 
-            for (const auto& cluster : nodeTopology) {
+            for (const auto& cluster : graph.nodeTopology) {
                 F32 largestColumnHeight = 0.0f;
                 F32 previousColumnsWidth = 0.0f;
 
@@ -3061,7 +3066,7 @@ Result Compositor::drawFlowgraph() {
                         dims.x /= scalingFactor;
                         dims.y /= scalingFactor;
 
-                        auto& block = nodeStates.at(nodeLocaleMap.at(nodeId)).block;
+                        auto& block = graph.nodeStates.at(graph.nodeLocaleMap.at(nodeId)).block;
                         auto& [x, y] = block->state.nodePos;
 
                         // Add previous columns horizontal offset.
@@ -3091,14 +3096,14 @@ Result Compositor::drawFlowgraph() {
             }
 
             ImNodes::EditorContextResetPanning({0.0f, 0.0f});
-            graphSpatiallyOrganized = true;
+            state.graphSpatiallyOrganized = true;
         }
 
         // Render underlying buffer information about the link.
         I32 linkId;
         if (ImNodes::IsLinkHovered(&linkId)) {
-            const auto& [inputLocale, outputLocale] = linkLocaleMap.at(linkId);
-            const auto& rec = nodeStates.at(outputLocale.block()).outputMap.at(outputLocale.pinId);
+            const auto& [inputLocale, outputLocale] = graph.linkLocaleMap.at(linkId);
+            const auto& rec = graph.nodeStates.at(outputLocale.block()).outputMap.at(outputLocale.pinId);
 
             ImGui::BeginTooltip();
             ImGui::TextWrapped(ICON_FA_MEMORY " Tensor Metadata");
@@ -3139,7 +3144,7 @@ Result Compositor::drawFlowgraph() {
         // Resize node by dragging interface logic.
         I32 nodeId;
         if (ImNodes::IsNodeHovered(&nodeId)) {
-            auto& node = nodeStates.at(nodeLocaleMap.at(nodeId)).block;
+            auto& node = graph.nodeStates.at(graph.nodeLocaleMap.at(nodeId)).block;
 
             const auto nodeDims = ImNodes::GetNodeDimensions(nodeId);
             const auto nodeOrigin = ImNodes::GetNodeScreenSpacePos(nodeId);
@@ -3151,16 +3156,16 @@ Result Compositor::drawFlowgraph() {
                 ImGui::GetMousePos().y >= nodeOrigin.y &&
                 ImGui::GetMousePos().y <= (nodeOrigin.y + nodeDims.y);
 
-            if (isNearRightEdge && ImGui::IsMouseDown(0) && !nodeDragId) {
+            if (isNearRightEdge && ImGui::IsMouseDown(0) && !state.nodeDragId) {
                 ImNodes::SetNodeDraggable(nodeId, false);
-                nodeDragId = nodeId;
+                state.nodeDragId = nodeId;
             }
 
-            if (nodeDragId) {
+            if (state.nodeDragId) {
                 nodeWidth = (ImGui::GetMousePos().x - nodeOrigin.x) - (nodeStyle.NodePadding.x * 2.0f);
             }
 
-            if (isNearRightEdge || nodeDragId) {
+            if (isNearRightEdge || state.nodeDragId) {
                 ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
             }
 
@@ -3168,9 +3173,9 @@ Result Compositor::drawFlowgraph() {
         }
 
         if (ImGui::IsMouseReleased(0)) {
-            if (nodeDragId) {
-                ImNodes::SetNodeDraggable(nodeDragId, true);
-                nodeDragId = 0;
+            if (state.nodeDragId) {
+                ImNodes::SetNodeDraggable(state.nodeDragId, true);
+                state.nodeDragId = 0;
             }
         }
 
@@ -3180,49 +3185,49 @@ Result Compositor::drawFlowgraph() {
     // Update the internal state when a link is deleted.
     I32 linkId;
     if (ImNodes::IsLinkDestroyed(&linkId)) {
-        unlinkMailbox = linkLocaleMap.at(linkId);
+        mailboxes.unlinkMailbox = graph.linkLocaleMap.at(linkId);
     }
 
     // Update the internal state when a link is created.
     I32 startId, endId;
     if (ImNodes::IsLinkCreated(&startId, &endId)) {
-        linkMailbox = {pinLocaleMap.at(endId), pinLocaleMap.at(startId)};
+        mailboxes.linkMailbox = {graph.pinLocaleMap.at(endId), graph.pinLocaleMap.at(startId)};
     }
 
     // Draw right-click menu for node actions.
-    if (ImNodes::IsNodeHovered(&nodeContextMenuNodeId) &&
+    if (ImNodes::IsNodeHovered(&state.nodeContextMenuNodeId) &&
         (ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
         ImGui::CloseCurrentPopup();
         ImGui::OpenPopup("##node_context_menu");
     }
 
     // Draw node context menu.
-    if (!fullscreenEnabled && ImGui::BeginPopup("##node_context_menu")) {
-        const auto& locale = nodeLocaleMap.at(nodeContextMenuNodeId);
-        const auto& state = nodeStates.at(locale.block());
+    if (!state.fullscreenEnabled && ImGui::BeginPopup("##node_context_menu")) {
+        const auto& locale = graph.nodeLocaleMap.at(state.nodeContextMenuNodeId);
+        const auto& state = graph.nodeStates.at(locale.block());
         const auto moduleEntry = Store::BlockMetadataList().at(state.fingerprint.id);
 
         // Delete node.
         if (ImGui::MenuItem("Delete Node")) {
-            deleteBlockMailbox = locale;
+            mailboxes.deleteBlockMailbox = locale;
         }
 
         // Rename node.
         if (ImGui::MenuItem("Rename Node")) {
-            globalModalToggle = true;
-            renameBlockLocale = locale;
-            renameBlockNewId = locale.blockId;
-            globalModalContentId = 6;
+            this->state.globalModalToggle = true;
+            this->state.renameBlockLocale = locale;
+            this->state.renameBlockNewId = locale.blockId;
+            this->state.globalModalContentId = 6;
         }
 
         // Enable/disable node toggle.
         if (ImGui::MenuItem("Enable Node", nullptr, state.block->complete())) {
-            toggleBlockMailbox = {locale, !state.block->complete()};
+            mailboxes.toggleBlockMailbox = {locale, !state.block->complete()};
         }
 
         // Reload node.
         if (ImGui::MenuItem("Reload Node")) {
-            reloadBlockMailbox = locale;
+            mailboxes.reloadBlockMailbox = locale;
         }
 
         // Device backend options.
@@ -3230,7 +3235,7 @@ Result Compositor::drawFlowgraph() {
             for (const auto& [device, _] : moduleEntry.options) {
                 const auto enabled = (state.block->device() == device);
                 if (ImGui::MenuItem(GetDevicePrettyName(device), nullptr, enabled)) {
-                    changeBlockBackendMailbox = {locale, device};
+                    mailboxes.changeBlockBackendMailbox = {locale, device};
                 }
             }
             ImGui::EndMenu();
@@ -3245,7 +3250,7 @@ Result Compositor::drawFlowgraph() {
                 const auto label = (outputDataType.empty()) ? jst::fmt::format("{}", inputDataType) :
                                                               jst::fmt::format("{} -> {}", inputDataType, outputDataType);
                 if (ImGui::MenuItem(label.c_str(), NULL, enabled)) {
-                    changeBlockDataTypeMailbox = {locale, types};
+                    mailboxes.changeBlockDataTypeMailbox = {locale, types};
                 }
             }
             ImGui::EndMenu();
@@ -3256,7 +3261,7 @@ Result Compositor::drawFlowgraph() {
                 ImGui::IsMouseClicked(1) ||
                 ImGui::IsMouseClicked(2))) {
         ImGui::CloseCurrentPopup();
-        nodeContextMenuNodeId = 0;
+        state.nodeContextMenuNodeId = 0;
     }
 
 
@@ -3264,13 +3269,13 @@ Result Compositor::drawFlowgraph() {
 }
 
 void Compositor::lock() {
-    interfaceHalt.wait(true);
-    interfaceHalt.test_and_set();
+    state.interfaceHalt.wait(true);
+    state.interfaceHalt.test_and_set();
 }
 
 void Compositor::unlock() {
-    interfaceHalt.clear();
-    interfaceHalt.notify_one();
+    state.interfaceHalt.clear();
+    state.interfaceHalt.notify_one();
 }
 
 }  // namespace Jetstream

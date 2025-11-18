@@ -1,19 +1,20 @@
 #include "jetstream/compositor.hh"
 #include "jetstream/instance.hh"
 #include "jetstream/platform.hh"
+#include "jetstream/render/tools/imgui_icons_ext.hh"
 
 namespace Jetstream {
 
 void Compositor::ImGuiMarkdownStyleSetup() {
-    _markdownConfig.linkCallback        = &Compositor::ImGuiMarkdownLinkCallback;
-    _markdownConfig.tooltipCallback     = nullptr;
-    _markdownConfig.imageCallback       = nullptr;
-    _markdownConfig.linkIcon            = ICON_FA_LINK;
-    _markdownConfig.headingFormats[0]   = { _h1Font, true };
-    _markdownConfig.headingFormats[1]   = { _h2Font, true };
-    _markdownConfig.headingFormats[2]   = { _boldFont, false };
-    _markdownConfig.userData            = this;
-    _markdownConfig.formatCallback      = &Compositor::ImGuiMarkdownFormatCallback;
+    styling.config.linkCallback        = &Compositor::ImGuiMarkdownLinkCallback;
+    styling.config.tooltipCallback     = nullptr;
+    styling.config.imageCallback       = nullptr;
+    styling.config.linkIcon            = ICON_FA_LINK;
+    styling.config.headingFormats[0]   = { styling.fonts.h1, true };
+    styling.config.headingFormats[1]   = { styling.fonts.h2, true };
+    styling.config.headingFormats[2]   = { styling.fonts.bold, false };
+    styling.config.userData            = this;
+    styling.config.formatCallback      = &Compositor::ImGuiMarkdownFormatCallback;
 }
 
 void Compositor::ImGuiMarkdownLinkCallback(ImGui::MarkdownLinkCallbackData data) {

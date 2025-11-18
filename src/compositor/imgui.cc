@@ -1,5 +1,6 @@
 #include "jetstream/compositor.hh"
 #include "jetstream/instance.hh"
+#include "jetstream/render/tools/imgui_icons_ext.hh"
 
 #include "resources/fonts/compressed_jbmm.hh"
 #include "resources/fonts/compressed_jbmb.hh"
@@ -17,11 +18,11 @@ void Compositor::ImGuiLoadFonts() {
     font_config.FontLoaderFlags = 1;
     io.Fonts->Clear();
 
-    _bodyFont = io.Fonts->AddFontFromMemoryCompressedTTF(jbmm_compressed_data,
-                                                         jbmm_compressed_size,
-                                                         15.0f * scalingFactor,
-                                                         &font_config,
-                                                         nullptr);
+    styling.fonts.body = io.Fonts->AddFontFromMemoryCompressedTTF(jbmm_compressed_data,
+                                                                   jbmm_compressed_size,
+                                                                   15.0f * scalingFactor,
+                                                                   &font_config,
+                                                                   nullptr);
 
     ImFontConfig icon_font_config;
     icon_font_config.OversampleH = 5;
@@ -45,23 +46,23 @@ void Compositor::ImGuiLoadFonts() {
                                              &icon_font_config,
                                              icon_ranges);
 
-    _h1Font = io.Fonts->AddFontFromMemoryCompressedTTF(jbmb_compressed_data,
-                                                       jbmb_compressed_size,
-                                                       15.0f * scalingFactor * 1.15,
-                                                       &font_config,
-                                                       nullptr);
+    styling.fonts.h1 = io.Fonts->AddFontFromMemoryCompressedTTF(jbmb_compressed_data,
+                                                                 jbmb_compressed_size,
+                                                                 15.0f * scalingFactor * 1.15,
+                                                                 &font_config,
+                                                                 nullptr);
 
-    _h2Font = io.Fonts->AddFontFromMemoryCompressedTTF(jbmb_compressed_data,
-                                                       jbmb_compressed_size,
-                                                       15.0f * scalingFactor * 1.10,
-                                                       &font_config,
-                                                       nullptr);
+    styling.fonts.h2 = io.Fonts->AddFontFromMemoryCompressedTTF(jbmb_compressed_data,
+                                                                 jbmb_compressed_size,
+                                                                 15.0f * scalingFactor * 1.10,
+                                                                 &font_config,
+                                                                 nullptr);
 
-    _boldFont = io.Fonts->AddFontFromMemoryCompressedTTF(jbmb_compressed_data,
-                                                         jbmb_compressed_size,
-                                                         15.0f * scalingFactor * 1.04,
-                                                         &font_config,
-                                                         nullptr);
+    styling.fonts.bold = io.Fonts->AddFontFromMemoryCompressedTTF(jbmb_compressed_data,
+                                                                   jbmb_compressed_size,
+                                                                   15.0f * scalingFactor * 1.04,
+                                                                   &font_config,
+                                                                   nullptr);
 }
 
 void Compositor::ImGuiStyleSetup() {
