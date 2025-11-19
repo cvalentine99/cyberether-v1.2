@@ -60,6 +60,8 @@ class WindowImp<Device::Vulkan> : public Window {
     Result recreate();
     Result createSynchronizationObjects();
     Result destroySynchronizationObjects();
+    Result createCommandBuffers();
+    Result destroyCommandBuffers();
 };
 
 }  // namespace Jetstream::Render

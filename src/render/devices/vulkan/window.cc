@@ -97,19 +97,7 @@ Result Implementation::underlyingCreate() {
         JST_ERROR("[VULKAN] Failed to create graphics command pool.");
     });
 
-    // Create command buffers.
-
-    commandBuffers.resize(viewport->getSwapchainImageViewsCount());
-
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = static_cast<U32>(commandBuffers.size());
-
-    JST_VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()), [&]{
-        JST_ERROR("[VULKAN] Can't create render command buffers.");
-    });
+    JST_CHECK(createCommandBuffers());
 
     // Create submodules.
 
@@ -132,7 +120,7 @@ Result Implementation::underlyingDestroy() {
     JST_CHECK(destroyImgui());
 
     auto& device = Backend::State<Device::Vulkan>()->getDevice();
-    vkFreeCommandBuffers(device, commandPool, commandBuffers.size(), commandBuffers.data());
+    JST_CHECK(destroyCommandBuffers());
     vkDestroyCommandPool(device, commandPool, nullptr);
     vkDestroyRenderPass(device, renderPass, nullptr);
 
@@ -146,6 +134,8 @@ Result Implementation::recreate() {
     JST_CHECK(destroyFramebuffer());
     JST_CHECK(viewport->destroySwapchain());
     JST_CHECK(viewport->createSwapchain());
+    JST_CHECK(destroyCommandBuffers());
+    JST_CHECK(createCommandBuffers());
     JST_CHECK(createFramebuffer());
     JST_CHECK(createSynchronizationObjects());
 
@@ -186,6 +176,7 @@ Result Implementation::destroyFramebuffer() {
     for (auto framebuffer : swapchainFramebuffers) {
         vkDestroyFramebuffer(device, framebuffer, nullptr);
     }
+    swapchainFramebuffers.clear();
 
     return Result::SUCCESS;
 }
@@ -423,6 +414,36 @@ Result Implementation::destroySynchronizationObjects() {
         vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
         vkDestroyFence(device, inFlightFences[i], nullptr);
     }
+
+    return Result::SUCCESS;
+}
+
+Result Implementation::createCommandBuffers() {
+    auto& device = Backend::State<Device::Vulkan>()->getDevice();
+
+    commandBuffers.resize(viewport->getSwapchainImageViewsCount());
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = static_cast<U32>(commandBuffers.size());
+
+    JST_VK_CHECK(vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()), [&]{
+        JST_ERROR("[VULKAN] Can't create render command buffers.");
+    });
+
+    return Result::SUCCESS;
+}
+
+Result Implementation::destroyCommandBuffers() {
+    if (commandBuffers.empty()) {
+        return Result::SUCCESS;
+    }
+
+    auto& device = Backend::State<Device::Vulkan>()->getDevice();
+    vkFreeCommandBuffers(device, commandPool, commandBuffers.size(), commandBuffers.data());
+    commandBuffers.clear();
 
     return Result::SUCCESS;
 }

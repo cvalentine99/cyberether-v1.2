@@ -1,5 +1,6 @@
 deps = [
     dependency('vulkan', required: false),
+    meson.get_compiler('cpp').find_library('nvidia-ml', required: false),
 ]
 
 progs = [

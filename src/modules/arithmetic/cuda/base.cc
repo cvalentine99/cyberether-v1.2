@@ -285,6 +285,9 @@ Result Arithmetic<D, T>::compute(const Context& ctx) {
         JST_CHECK(Memory::Copy(pimpl->input, input.buffer, ctx.cuda->stream()));
     }
 
+    // Update input pointer in case tensor was reallocated
+    pimpl->inputMeta.ptr = const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(pimpl->input.data())) + pimpl->input.offset_bytes();
+
     pimpl->operation = static_cast<int>(config.operation);
 
     JST_CUDA_CHECK(cudaMemsetAsync(output.buffer.data(), 0, output.buffer.size_bytes(), ctx.cuda->stream()), [&]{

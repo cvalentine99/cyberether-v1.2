@@ -204,7 +204,7 @@ Result Implementation::encode(VkCommandBuffer& commandBuffer) {
                              0, nullptr);
     }
 
-    // Begin render pass.
+    // Encode programs inside this surface render pass.
 
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -226,8 +226,6 @@ Result Implementation::encode(VkCommandBuffer& commandBuffer) {
     renderPassInfo.pClearValues = &clearColor;
 
     vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    // Encode programs.
 
     for (auto& program : programs) {
         JST_CHECK(program->encode(commandBuffer, renderPass));

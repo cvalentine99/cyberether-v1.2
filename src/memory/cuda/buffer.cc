@@ -40,6 +40,8 @@ Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>& storage,
     // Allocate memory.
 
     if (prototype.size_bytes > 0) {
+        uses_device_virtual_memory = false;
+
         if (host_accessible) {
             size_bytes = JST_PAGE_ALIGNED_SIZE(prototype.size_bytes);
 
@@ -89,6 +91,7 @@ Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>& storage,
                 });
 
                 buffer = reinterpret_cast<void*>(device_ptr);
+                uses_device_virtual_memory = true;
             } else {
                 size_bytes = JST_PAGE_ALIGNED_SIZE(prototype.size_bytes);
 
@@ -105,9 +108,15 @@ Implementation::TensorBuffer(std::shared_ptr<TensorStorageMetadata>& storage,
 
         // Null out array.
 
-        JST_CUDA_CHECK_THROW(cudaMemset(buffer, 0, size_bytes), [&]{
-            JST_FATAL("[CUDA:BUFFER] Failed to zero out CUDA memory: {}", err);
-        });
+        if (uses_device_virtual_memory) {
+            JST_CUDA_CHECK_THROW(cuMemsetD8(device_ptr, 0, size_bytes), [&]{
+                JST_FATAL("[CUDA:BUFFER] Failed to zero out CUDA memory: {}", err);
+            });
+        } else {
+            JST_CUDA_CHECK_THROW(cudaMemset(buffer, 0, size_bytes), [&]{
+                JST_FATAL("[CUDA:BUFFER] Failed to zero out CUDA memory: {}", err);
+            });
+        }
     }
 
     // Add compatible devices.

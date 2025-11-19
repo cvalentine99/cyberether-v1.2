@@ -70,6 +70,7 @@ class TensorBuffer<Device::CUDA> : public TensorBufferBase {
 
     CUdeviceptr device_ptr;
     CUmemGenericAllocationHandle alloc_handle;
+    bool uses_device_virtual_memory = false;
 
 #ifdef JETSTREAM_BACKEND_VULKAN_AVAILABLE
     int vulkan_file_descriptor = 0;

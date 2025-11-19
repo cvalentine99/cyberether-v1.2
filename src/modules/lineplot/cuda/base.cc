@@ -157,6 +157,10 @@ Result Lineplot<D, T>::compute(const Context& ctx) {
         JST_CHECK(Memory::Copy(pimpl->input, input.buffer, ctx.cuda->stream()));
     }
 
+    // Update input pointer in case tensor was reallocated
+    auto& tensor = pimpl->input;
+    pimpl->inputMeta.ptr = const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(tensor.data())) + tensor.offset_bytes();
+
     const U64 threadsPerBlock = std::min<U64>(kLineplotThreadsPerBlock,
                                               gimpl->numberOfElements == 0 ? 1 : gimpl->numberOfElements);
     pimpl->block[0] = threadsPerBlock;

@@ -27,6 +27,11 @@ struct Multiply<D, T>::Impl {
     Tensor<Device::CUDA, T> factorAFallback;
     Tensor<Device::CUDA, T> factorBFallback;
     Tensor<Device::CUDA, T> productFallback;
+
+    // Tensors used by generic code for broadcasting
+    Tensor<D, T> a;
+    Tensor<D, T> b;
+    Tensor<D, T> c;
 };
 
 template<Device D, typename T>
@@ -107,7 +112,7 @@ template<Device D, typename T>
 Result Multiply<D, T>::compute(const Context& ctx) {
     auto prepareTensor = [&](const Tensor<D, T>& source,
                              Tensor<Device::CUDA, T>& fallback,
-                             typename Impl::Meta& meta) -> const Tensor<Device::CUDA, T>& {
+                             typename Impl::Meta& meta) {
         const Tensor<Device::CUDA, T>* tensor = nullptr;
         if (source.device_native() && source.contiguous()) {
             tensor = &source;
@@ -115,7 +120,7 @@ Result Multiply<D, T>::compute(const Context& ctx) {
             if (fallback.size() == 0 || fallback.shape() != source.shape()) {
                 fallback = Tensor<Device::CUDA, T>(source.shape());
             }
-            JST_CHECK(Memory::Copy(fallback, source, ctx.cuda->stream()));
+            Memory::Copy(fallback, source, ctx.cuda->stream());
             tensor = &fallback;
         }
 
@@ -125,12 +130,10 @@ Result Multiply<D, T>::compute(const Context& ctx) {
             meta.shape[i] = tensor->shape()[i];
             meta.strides[i] = tensor->stride()[i];
         }
-
-        return *tensor;
     };
 
-    const auto& factorA = prepareTensor(input.factorA, impl->factorAFallback, impl->factorAMeta);
-    const auto& factorB = prepareTensor(input.factorB, impl->factorBFallback, impl->factorBMeta);
+    prepareTensor(input.factorA, impl->factorAFallback, impl->factorAMeta);
+    prepareTensor(input.factorB, impl->factorBFallback, impl->factorBMeta);
 
     bool copyBack = false;
     const Tensor<Device::CUDA, T>* productTensor = nullptr;

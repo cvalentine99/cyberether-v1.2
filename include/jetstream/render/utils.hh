@@ -18,52 +18,41 @@ inline std::tuple<void*, bool> ConvertToOptimalStorage(auto& window, Tensor<D, T
     (void)optimalDevice;
     (void)renderDevice;
 
-    if (tensor.compatible_devices().contains(renderDevice)) {
+    if (tensor.device() == renderDevice) {
 #ifdef JETSTREAM_BACKEND_CPU_AVAILABLE
         if (renderDevice == Device::CPU) {
-            auto optimal = MapOn<Device::CPU>(tensor);
-            if (optimal.device_native()) {
-                enableZeroCopy = true;
-            }
-            buffer = optimal.data();
+            buffer = tensor.data();
+            enableZeroCopy = tensor.device_native();
             optimalDevice = Device::CPU;
         }
 #endif
 
 #ifdef JETSTREAM_BACKEND_METAL_AVAILABLE
         if (renderDevice == Device::Metal) {
-            auto optimal = MapOn<Device::Metal>(tensor);
-            if (optimal.device_native()) {
-                enableZeroCopy = true;
-            }
-            buffer = optimal.data();
+            buffer = tensor.data();
+            enableZeroCopy = tensor.device_native();
             optimalDevice = Device::Metal;
         }
 #endif
 
 #ifdef JETSTREAM_BACKEND_VULKAN_AVAILABLE
         if (renderDevice == Device::Vulkan) {
-            auto optimal = MapOn<Device::Vulkan>(tensor);
-            if (optimal.device_native()) {
-                enableZeroCopy = true;
-            }
-            buffer = optimal.data();
+            buffer = tensor.data();
+            enableZeroCopy = tensor.device_native();
             optimalDevice = Device::Vulkan;
         }
 #endif
 
 #ifdef JETSTREAM_BACKEND_CUDA_AVAILABLE
         if (renderDevice == Device::CUDA) {
-            auto optimal = MapOn<Device::CUDA>(tensor);
-            if (optimal.device_native()) {
-                enableZeroCopy = true;
-            }
-            buffer = optimal.data();
+            buffer = tensor.data();
+            enableZeroCopy = tensor.device_native();
             optimalDevice = Device::CUDA;
         }
 #endif
     } else {
-        buffer = MapOn<Device::CPU>(tensor).data();
+        auto& optimal = MapOn<Device::CPU>(tensor);
+        buffer = optimal.data();
         enableZeroCopy = false;
         optimalDevice = Device::CPU;
     }

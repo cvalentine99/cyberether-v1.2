@@ -211,6 +211,10 @@ class JETSTREAM_API Instance {
             auto& block = _flowgraph.nodes().at(locale.block())->block;
             block->setComplete(false);
             block->pushError(jst::fmt::format("[{}] {}", locale, JST_LOG_LAST_ERROR()));
+
+            // Populate output map even on failure so downstream modules get valid buffers
+            JST_CHECK(module->output >> node->outputMap);
+
             if (module->destroy() != Result::SUCCESS) {
                 JST_WARN("[INSTANCE] Module '{}' cleanup failed after create error.", locale);
             }

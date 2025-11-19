@@ -27,8 +27,13 @@ Result Waterfall<D, T>::GImpl::underlyingCompute(Waterfall<D, T>& m, const Conte
     const auto direction = (m.input.buffer.device_native()) ? cudaMemcpyDeviceToDevice :
                                                             cudaMemcpyHostToDevice;
 
-    uint8_t* bins = reinterpret_cast<uint8_t*>(frequencyBins.data());
-    uint8_t* in = reinterpret_cast<uint8_t*>(m.input.buffer.data());
+    auto tensorDataPointer = [](const auto& tensor) -> uint8_t* {
+        const auto base = reinterpret_cast<const uint8_t*>(tensor.data());
+        return const_cast<uint8_t*>(base) + tensor.offset_bytes();
+    };
+
+    uint8_t* bins = tensorDataPointer(frequencyBins);
+    const uint8_t* in = tensorDataPointer(m.input.buffer);
 
     JST_CUDA_CHECK(cudaMemcpyAsync(bins + offset,
                                    in,

@@ -133,6 +133,10 @@ Result Scale<D, T>::compute(const Context& ctx) {
         JST_CHECK(Memory::Copy(impl->input, input.buffer, ctx.cuda->stream()));
     }
 
+    // Update input pointer in case tensor was reallocated
+    auto& tensor = impl->input;
+    impl->inputMeta.ptr = const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(tensor.data())) + tensor.offset_bytes();
+
     JST_CHECK(ctx.cuda->launchKernel("scale",
                                      impl->grid,
                                      impl->block,

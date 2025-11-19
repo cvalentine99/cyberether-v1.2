@@ -36,7 +36,7 @@ graph:
       numberOfTimeSamples: 8000
       numberOfBatches: 8
       automaticGain: true
-      deviceString: 'driver=rtlsdr'
+      deviceString: ''
     interface:
       previewEnabled: false
       viewEnabled: false

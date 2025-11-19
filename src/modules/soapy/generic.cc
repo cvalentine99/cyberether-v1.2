@@ -17,8 +17,8 @@ struct Soapy<D, T>::Impl {
     SoapySDR::RangeList sampleRateRanges;
     SoapySDR::RangeList frequencyRanges;
 
-    SoapySDR::Device* soapyDevice;
-    SoapySDR::Stream* soapyStream;
+    SoapySDR::Device* soapyDevice = nullptr;
+    SoapySDR::Stream* soapyStream = nullptr;
 
     std::thread producer;
     bool errored = false;
@@ -48,6 +48,11 @@ template<Device D, typename T>
 Result Soapy<D, T>::create() {
     JST_DEBUG("Initializing Soapy module.");
     JST_INIT_IO();
+
+    // Allocate output buffer FIRST to ensure downstream modules always have valid memory.
+    // Even if device initialization fails, this prevents crashes in modules that reference this output.
+    const std::vector<U64> outputShape = { config.numberOfBatches, config.numberOfTimeSamples };
+    output.buffer = Tensor<D, T>(outputShape);
 
     impl->errored = false;
     impl->streaming = false;
@@ -198,14 +203,6 @@ Result Soapy<D, T>::create() {
         return Result::ERROR;
     }
 
-    // Calculate shape.
-
-    std::vector<U64> outputShape = { config.numberOfBatches, config.numberOfTimeSamples };
-
-    // Allocate output.
-
-    output.buffer = Tensor<D, T>(outputShape);
-
     // Allocate circular buffer.
 
     impl->buffer.resize(output.buffer.size() * config.bufferMultiplier);
@@ -232,21 +229,25 @@ Result Soapy<D, T>::destroy() {
         impl->producer.join();
     }
 
-    try {
-        impl->soapyDevice->deactivateStream(impl->soapyStream, 0, 0);
-        impl->soapyDevice->closeStream(impl->soapyStream);
-    } catch(const std::exception& e) {
-        JST_ERROR("Failed to deactivate/close stream ({}).", e.what());
-    } catch(...) {
-        JST_ERROR("Failed to deactivate/close stream.");
+    if (impl->soapyDevice != nullptr && impl->soapyStream != nullptr) {
+        try {
+            impl->soapyDevice->deactivateStream(impl->soapyStream, 0, 0);
+            impl->soapyDevice->closeStream(impl->soapyStream);
+        } catch(const std::exception& e) {
+            JST_ERROR("Failed to deactivate/close stream ({}).", e.what());
+        } catch(...) {
+            JST_ERROR("Failed to deactivate/close stream.");
+        }
     }
 
-    try {
-        SoapySDR::Device::unmake(impl->soapyDevice);
-    } catch(const std::exception& e) {
-        JST_ERROR("Failed to unmake device ({}).", e.what());
-    } catch(...) {
-        JST_ERROR("Failed to unmake device.");
+    if (impl->soapyDevice != nullptr) {
+        try {
+            SoapySDR::Device::unmake(impl->soapyDevice);
+        } catch(const std::exception& e) {
+            JST_ERROR("Failed to unmake device ({}).", e.what());
+        } catch(...) {
+            JST_ERROR("Failed to unmake device.");
+        }
     }
 
     return Result::SUCCESS;

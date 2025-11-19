@@ -74,10 +74,10 @@ Result Amplitude<D, IT, OT>::createCompute(const Context& ctx) {
         pimpl->input = input.buffer;
     }
 
-    // Initialize kernel arguments.
+    // Initialize kernel arguments (pointers will be updated in compute())
 
     pimpl->arguments = {
-        pimpl->input.data_ptr(),
+        nullptr,  // Will be set in compute()
         output.buffer.data_ptr(),
         &pimpl->scalingCoeff,
         &pimpl->numberOfElements,
@@ -91,6 +91,9 @@ Result Amplitude<D, IT, OT>::compute(const Context& ctx) {
     if (!input.buffer.device_native() && input.buffer.contiguous()) {
         JST_CHECK(Memory::Copy(pimpl->input, input.buffer, ctx.cuda->stream()));
     }
+
+    // Update input pointer (arguments[0]) in case tensor was reallocated
+    pimpl->arguments[0] = pimpl->input.data_ptr();
 
     JST_CHECK(ctx.cuda->launchKernel("amplitude",
                                      pimpl->grid,

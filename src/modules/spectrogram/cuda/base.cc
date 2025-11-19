@@ -16,6 +16,10 @@ struct Spectrogram<D, T>::Impl {
     std::vector<void*> riseArguments;
 
     Tensor<Device::CUDA, T> input;
+
+    // Pointer storage for kernel arguments
+    void* inputPtr = nullptr;
+    void* frequencyBinsPtr = nullptr;
 };
 
 template<Device D, typename T>
@@ -34,13 +38,7 @@ template<Device D, typename T>
 Result Spectrogram<D, T>::createCompute(const Context& ctx) {
     JST_TRACE("Create Spectrogram compute core using CUDA backend.");
 
-    // Initialize kernel input.
-
-    if (!input.buffer.device_native() && input.buffer.contiguous()) {
-        pimpl->input = Tensor<Device::CUDA, T>(input.buffer.shape());
-    } else {
-        pimpl->input = input.buffer;
-    }
+    // Initialize kernel input fallback tensor (will be allocated on first use if needed)
 
     // Create CUDA kernel.
 
@@ -94,17 +92,23 @@ Result Spectrogram<D, T>::createCompute(const Context& ctx) {
         pimpl->riseBlock = { threadsPerBlock, 1, 1 };
     }
 
+    auto refreshFrequencyBinsPointer = [&]() {
+        const auto base = reinterpret_cast<const uint8_t*>(gimpl->frequencyBins.data());
+        pimpl->frequencyBinsPtr = const_cast<uint8_t*>(base) + gimpl->frequencyBins.offset_bytes();
+    };
+    refreshFrequencyBinsPointer();
+
     // Initialize kernel arguments.
 
     pimpl->decayArguments = {
-        gimpl->frequencyBins.data_ptr(),
+        &pimpl->frequencyBinsPtr,
         &gimpl->decayFactor,
         &gimpl->totalFrequencyBins,
     };
 
     pimpl->riseArguments = {
-        input.buffer.data_ptr(),
-        gimpl->frequencyBins.data_ptr(),
+        &pimpl->inputPtr,  // Address of pointer (will be updated in compute())
+        &pimpl->frequencyBinsPtr,
         &gimpl->numberOfElements,
         &gimpl->numberOfBatches,
         &config.height,
@@ -115,8 +119,27 @@ Result Spectrogram<D, T>::createCompute(const Context& ctx) {
 
 template<Device D, typename T>
 Result Spectrogram<D, T>::compute(const Context& ctx) {
-    if (!input.buffer.device_native() && input.buffer.contiguous()) {
+    // Determine which tensor to use for CUDA kernel
+    // D is Device::CUDA in this backend implementation
+
+    auto tensorDataPointer = [](const auto& tensor) -> void* {
+        const auto base = reinterpret_cast<const uint8_t*>(tensor.data());
+        return const_cast<uint8_t*>(base) + tensor.offset_bytes();
+    };
+
+    // Update frequency bins pointer (in case tensor was reallocated)
+    pimpl->frequencyBinsPtr = tensorDataPointer(gimpl->frequencyBins);
+
+    if (input.buffer.contiguous()) {
+        // Input is already contiguous, use directly
+        pimpl->inputPtr = tensorDataPointer(input.buffer);
+    } else {
+        // Need to copy to CUDA fallback tensor (for non-contiguous data)
+        if (pimpl->input.size() == 0 || pimpl->input.shape() != input.buffer.shape()) {
+            pimpl->input = Tensor<Device::CUDA, T>(input.buffer.shape());
+        }
         JST_CHECK(Memory::Copy(pimpl->input, input.buffer, ctx.cuda->stream()));
+        pimpl->inputPtr = tensorDataPointer(pimpl->input);
     }
 
     JST_CHECK(ctx.cuda->launchKernel("decay",
